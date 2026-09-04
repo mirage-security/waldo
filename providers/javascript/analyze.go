@@ -20,6 +20,7 @@ var rules []byte
 type Options struct {
 	SemgrepExecutable string
 	Targets           []string
+	Excludes          []string
 }
 
 func Analyze(ctx context.Context, root string, options Options) ([]protocol.CodeFact, error) {
@@ -37,5 +38,6 @@ func Analyze(ctx context.Context, root string, options Options) ([]protocol.Code
 		Executable: options.SemgrepExecutable,
 		Configs:    []string{configuration},
 		Targets:    options.Targets,
+		Excludes:   options.Excludes,
 	})
 }
