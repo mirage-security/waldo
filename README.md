@@ -72,6 +72,11 @@ go run ./cmd/waldo check \
 The first command intentionally exits `1`; the second exits `0`. This proof requires Semgrep on `PATH`. The adapter
 translates only rules with explicit `metadata.waldo`; ordinary lint and security results are ignored.
 
+Waldo also ships a [JavaScript provider](providers/javascript/README.md) whose generic language rules are embedded
+behind `waldo-javascript-provider`. Consumers select scan targets but do not maintain Semgrep configuration for
+built-in facts. Its first fact maps assigned asynchronous `setTimeout` callbacks to process-local deferred execution;
+it deliberately leaves architectural criticality unset.
+
 These are the current foundation claims. Waldo is not claiming a broad rule catalog.
 
 ## How Waldo reaches a finding
