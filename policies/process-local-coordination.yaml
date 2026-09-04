@@ -1,0 +1,19 @@
+version: 1
+
+policies:
+  - id: process-local-coordination
+    title: Process-local authority cannot coordinate concurrent instances
+    severity: error
+    when:
+      deployment:
+        process.instances.concurrent:
+          greaterThan: 1
+        memory.scope: instance
+      code:
+        kind: coordination
+        attributes:
+          coordination.authority: process-local
+          coordination.confidence: high
+          coordination.requiredScope: deployment
+          coordination.scope: cross-request
+    message: Cross-request coordination relies on authority visible to only one of multiple independently executing instances.

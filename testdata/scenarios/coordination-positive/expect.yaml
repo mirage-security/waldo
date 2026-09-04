@@ -1,0 +1,5 @@
+policyId: process-local-coordination
+severity: error
+disposition: unresolved
+findings: 1
+failing: 1

@@ -2,6 +2,7 @@ package foundation_test
 
 import (
 	"context"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -89,5 +90,49 @@ func TestOneInvariantAcrossTwoDeploymentModels(t *testing.T) {
 	}
 	if reflect.DeepEqual(executionModels[0], executionModels[1]) {
 		t.Fatalf("expected distinct deployment models, got %#v", executionModels)
+	}
+}
+
+func TestProcessLocalCoordinationSourceProof(t *testing.T) {
+	if _, err := exec.LookPath("semgrep"); err != nil {
+		t.Skip("semgrep is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := []struct {
+		path         string
+		wantFindings int
+	}{
+		{path: "examples/process-local-coordination/replicated.waldo.yaml", wantFindings: 1},
+		{path: "examples/process-local-coordination/single-instance.waldo.yaml", wantFindings: 0},
+	}
+	for _, testCase := range models {
+		t.Run(filepath.Base(testCase.path), func(t *testing.T) {
+			configuration, err := config.Load(filepath.Join(root, testCase.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			facts, err := provider.Collect(ctx, root, configuration.Providers)
+			cancel()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(facts) != 1 || facts[0].Kind != "coordination" || facts[0].Attributes["coordination.confidence"] != "high" {
+				t.Fatalf("unexpected provider facts: %#v", facts)
+			}
+			findings, err := policy.Evaluate(configuration, facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(findings) != testCase.wantFindings {
+				t.Fatalf("got %d findings, want %d: %#v", len(findings), testCase.wantFindings, findings)
+			}
+			if len(findings) == 1 && (findings[0].PolicyID != "process-local-coordination" || findings[0].Severity != model.SeverityError || !findings[0].FailsCI()) {
+				t.Fatalf("unexpected finding: %#v", findings[0])
+			}
+		})
 	}
 }

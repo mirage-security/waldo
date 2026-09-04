@@ -7,12 +7,15 @@ survives the way the process is run. A deployment model can say that processes a
 is non-durable. It cannot, by itself, identify which source operation carries a product guarantee. Waldo joins those
 facts through an architectural policy and reports the consequence.
 
-## The proof
+## The proofs
 
-The repository contains one source-backed invariant:
+The repository contains two source-backed invariants:
 
 > Correctness-critical deferred work must not depend on process-local scheduling when its execution authority is
 > restartable.
+
+> Cross-request coordination that requires deployment scope must not depend on process-local authority when multiple
+> independently executing instances have instance-scoped memory.
 
 The standalone [example source](examples/durable-deferred-work/app/expiry.go) contains two Go `time.AfterFunc` calls.
 A separate [Go AST provider](providers/goast/README.md) reports both as process-local deferred execution, but marks only
@@ -51,7 +54,25 @@ models load an identical policy and produce an identical finding identity:
 go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
 ```
 
-This is the current foundation claim. Waldo is not claiming a broad rule catalog yet.
+The second proof uses a thin [Semgrep provider adapter](providers/semgrep/README.md). A deliberately narrow
+provider-side rule recognizes module-local state exposed as a deployment-scoped cross-request predicate and emits an
+analyzer-neutral `coordination` fact. The same source produces an unresolved error under the replicated model and no
+finding under the single-instance model:
+
+```sh
+go run ./cmd/waldo check \
+  --root . \
+  --config examples/process-local-coordination/replicated.waldo.yaml
+
+go run ./cmd/waldo check \
+  --root . \
+  --config examples/process-local-coordination/single-instance.waldo.yaml
+```
+
+The first command intentionally exits `1`; the second exits `0`. This proof requires Semgrep on `PATH`. The adapter
+translates only rules with explicit `metadata.waldo`; ordinary lint and security results are ignored.
+
+These are the current foundation claims. Waldo is not claiming a broad rule catalog.
 
 ## How Waldo reaches a finding
 
@@ -66,9 +87,9 @@ deployment facts + code facts + architectural policy + human disposition -> find
 - Policies express architectural invariants as joins over both sets of facts.
 - Dispositions record a human decision about one stable finding. They do not rewrite facts or weaken a policy.
 
-Waldo core is language- and analyzer-agnostic. OpenGrep, GritQL, compiler-backed analyzers, and small structural
-scanners can all emit the same versioned [JSONL provider protocol](docs/provider-protocol.md). The in-repository Go
-provider is one proof of that interface; the core binary does not import it.
+Waldo core is language- and analyzer-agnostic. OpenGrep, Semgrep, GritQL, compiler-backed analyzers, and small
+structural scanners can all emit the same versioned [JSONL provider protocol](docs/provider-protocol.md). The
+in-repository Go provider and Semgrep adapter prove that interface; the core binary imports neither.
 
 ## Deployment and policy model
 
@@ -150,13 +171,13 @@ go run ./cmd/waldo compare --base base.report.json --head head.report.json --jso
 
 ## What should come next
 
-The next source-backed proof should test a different architectural dimension: process-local coordination under
-multiple instances. It should combine a deployment fact such as `process.replicas > 1` with code facts showing local
-state used for locking, deduplication, uniqueness, or another authoritative decision.
+Use real pull requests to select the next invariant. A candidate is eligible only after a concrete source example,
+explicit deployment facts, and a conclusion that normal lint cannot reach. Likely areas include narrow local locking,
+deduplication, uniqueness, leadership, ephemeral filesystem authority, volatile buffered delivery, and stale state
+across an externally concurrent yield. None should be added merely to fill out the taxonomy.
 
-A draft `replica-local-authority` policy and semantic fixtures exist, but they are not yet a provider-backed product
-claim. General local-state provenance should begin as a warning; narrower evidence of process-local coordination may
-justify a separate error-level invariant. The next work is to prove that boundary, not add another timer detector.
+`replica-local-authority` remains a warning. `process-local-coordination` is an error only when the provider explicitly
+establishes high confidence and deployment-wide required scope; “local cache under multiple replicas” is not enough.
 
 ## Development
 
@@ -165,6 +186,7 @@ go test ./...
 go vet ./...
 ```
 
-The fixture scenarios cover durable deferred execution, benign deferred work, replica-local authority, an accepted
-architectural choice, and a known analyzer limitation recorded as a false positive. They express semantic inputs and
-expected findings rather than carrying forward any source-language scanner implementation.
+The fixture scenarios cover durable deferred execution, benign deferred work, high-confidence process-local
+coordination, low-confidence local state, replica-local authority, an accepted architectural choice, and a known
+analyzer limitation recorded as a false positive. They express semantic inputs and expected findings rather than
+coupling policy evaluation to a source-language analyzer.

@@ -11,7 +11,7 @@ func TestLoadResolvesSharedPolicyFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(configuration.PolicyFiles) != 2 || len(configuration.Policies) != 2 {
+	if len(configuration.PolicyFiles) != 3 || len(configuration.Policies) != 3 {
 		t.Fatalf("unexpected shared policies: %#v", configuration)
 	}
 }

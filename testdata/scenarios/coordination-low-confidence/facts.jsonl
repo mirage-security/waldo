@@ -1,0 +1,1 @@
+{"id":"coordination:possible-cache","provider":"fixture","kind":"coordination","source":{"path":"src/cache/state.example","line":18},"symbol":"cache","attributes":{"coordination.authority":"process-local","coordination.confidence":"bounded","coordination.requiredScope":"deployment","coordination.scope":"cross-request","coordination.semantics":"cache"}}

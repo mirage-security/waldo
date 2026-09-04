@@ -35,4 +35,6 @@ Go providers may import `github.com/mirage-security/waldo/protocol` for the vers
 in every other language use the same JSON contract; the Go package is a convenience, not a required SDK.
 
 Provider selection is policy-specific. A structural matcher can emit `deferred-execution` facts; richer provenance or
-dataflow may warrant OpenGrep or a language-specific analyzer. The transport contract does not privilege one engine.
+dataflow may warrant OpenGrep, Semgrep, or a language-specific analyzer. The transport contract does not privilege one
+engine. The in-repository [Semgrep adapter](../providers/semgrep/README.md) demonstrates how analyzer-specific results
+become normalized facts without teaching Waldo core about source syntax.

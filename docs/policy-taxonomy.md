@@ -19,13 +19,15 @@ should broaden provider coverage for the invariant before adding API-shaped vari
 | Policy | Status | Intended claim |
 | --- | --- | --- |
 | `replica-local-authority` | Draft warning | A correctness path consults instance-local mutable state while multiple instances execute. |
-| `process-local-lock` | Future error | Instance-local exclusion cannot provide fleet-wide exclusion. |
+| `process-local-coordination` | Source-backed error | High-confidence process-local authority cannot provide required deployment-wide coordination among concurrent instances. |
+| `process-local-lock` | Future specialization | Instance-local exclusion cannot provide fleet-wide exclusion. |
 | `process-local-deduplication` | Future error | Instance-local state cannot provide deployment-wide deduplication. |
 | `process-local-uniqueness` | Future error | Instance-local state cannot enforce uniqueness across independently executing instances. |
 | `process-local-leadership` | Future error | Instance-local authority cannot establish a unique deployment-wide coordinator. |
 
-The broad authority rule remains a warning because local state may be an optimization backed by a durable source. The
-narrow rules should become errors only when provider evidence establishes both the mechanism and its required scope.
+The broad authority rule remains a warning because local state may be an optimization backed by a durable source.
+`process-local-coordination` requires explicit high-confidence provider evidence and deployment-wide required scope.
+The narrower named mechanisms should be added only when real examples justify distinct facts or messages.
 
 ## Consistency
 
