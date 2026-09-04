@@ -42,9 +42,14 @@ Not a core invariant:
 
 > Do not reuse state after an asynchronous yield without revalidation.
 
-That race can be wrong in one process with one deployed instance. Language/runtime scheduling facts may be enough to
-reach the conclusion, so the check belongs in an analyzer rather than a core policy. The mere presence of an external
-concurrent actor does not turn a source-level race into a deployment invariant.
+The source shape alone belongs in an analyzer. A possible core invariant is narrower:
+
+> An atomic read-modify-write operation cannot cross a boundary that admits competing execution against the same
+> authority.
+
+That conclusion requires provider facts about the read, dependent write, and suspension; execution and deployment
+facts establishing that the suspension admits contenders sharing the authority; and an architectural requirement for
+atomicity. A runtime that preserves exclusive ownership through the operation must not produce the finding.
 
 ## Policy shape
 

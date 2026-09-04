@@ -173,12 +173,14 @@ go run ./cmd/waldo compare --base base.report.json --head head.report.json --jso
 
 Use real pull requests to select the next invariant. A candidate is eligible only after a concrete source example,
 explicit deployment facts, and a conclusion that normal lint cannot reach. Likely areas include narrow local locking,
-deduplication, uniqueness, leadership, ephemeral filesystem authority, and volatile buffered delivery. None should be
-added merely to fill out the taxonomy.
+deduplication, uniqueness, leadership, ephemeral filesystem authority, volatile buffered delivery, and coordination
+across an interleaving boundary. None should be added merely to fill out the taxonomy.
 
-Stale state reused across an asynchronous yield is not, by itself, a Waldo invariant: it can fail inside one process
-with one deployed instance. That belongs in a source analyzer unless a separate architectural conclusion genuinely
-requires an explicit deployment fact.
+Stale state reused across an asynchronous yield is not, by itself, a Waldo invariant. A source provider may report
+that a read-modify-write path suspends, but a core policy would additionally need explicit execution and deployment
+facts establishing that suspension admits contenders which share the authority, plus a requirement that the operation
+be atomic. A runtime that preserves exclusive ownership through the operation is a negative case even when the source
+looks similar.
 
 `replica-local-authority` remains a warning. `process-local-coordination` is an error only when the provider explicitly
 establishes high confidence and deployment-wide required scope; “local cache under multiple replicas” is not enough.
