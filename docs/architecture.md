@@ -26,20 +26,22 @@ making reuse explicit and allowing deployment models to vary independently from 
 
 ## Initial semantic policies
 
-The example configuration records two reusable invariants:
+The examples record three reusable policies, two of them source-backed invariants:
 
 1. Correctness-critical deferred work must use durable execution authority when its process is restartable. A timer is
    only one possible analyzer-observed manifestation; the invariant is not tied to a timer API or language.
-2. A decision that may treat process-local state as authoritative in a multi-replica deployment deserves warning-level
+2. Deployment-scoped cross-request coordination cannot use process-local authority when multiple independently
+   executing instances have instance-scoped memory. Error severity requires a high-confidence provider fact.
+3. A decision that may treat process-local state as authoritative in a multi-replica deployment deserves warning-level
    review. Providers with stronger provenance or dataflow can produce better facts. More specific locking,
    deduplication, or coordination policies may justifiably be errors.
 
 These policies deliberately do not imply that all deferred work is correctness-critical or all local caches are
 architectural failures.
 
-The executable foundation proof uses a Go-specific provider solely because Go's AST tooling is available without
-embedding an analyzer in core. That provider imports the public protocol package; core never imports the provider.
-Another analyzer can replace it while emitting the same fact shape.
+The executable foundation proofs use a Go-specific provider and a separate Semgrep adapter. The adapter translates
+only analyzer rules with explicit Waldo metadata and leaves parsing, discovery, syntax, and concrete APIs in Semgrep.
+Core imports neither provider. Another analyzer can replace either while emitting the same fact shape.
 
 ## Stable identities
 

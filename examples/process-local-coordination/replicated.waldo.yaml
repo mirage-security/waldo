@@ -1,0 +1,24 @@
+version: 1
+
+deployment:
+  units:
+    call-gateway:
+      codeRoots: [examples/process-local-coordination/app]
+      facts:
+        platform.executionModel: orchestrated-container
+        process.instances.concurrent: 3
+        memory.scope: instance
+
+providers:
+  - name: semgrep-typescript
+    command:
+      - go
+      - run
+      - ./cmd/waldo-semgrep-provider
+      - --config
+      - examples/process-local-coordination/semgrep.yaml
+      - --target
+      - examples/process-local-coordination/app
+
+policyFiles:
+  - ../../policies/process-local-coordination.yaml

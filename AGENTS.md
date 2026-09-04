@@ -9,8 +9,8 @@ useful. A core policy belongs here only when its conclusion requires both code f
 
 ## Current foundation
 
-The only source-backed policy currently claimed by the project is `durable-deferred-execution`. Its executable proof
-uses:
+The source-backed policies currently claimed by the project are `durable-deferred-execution` and
+`process-local-coordination`. The durable-execution proof uses:
 
 - standalone source in `examples/durable-deferred-work/app/`;
 - the separate provider in `providers/goast/`;
@@ -21,9 +21,11 @@ uses:
 Both models must continue to load the same policy and produce the same stable unresolved-error identity. Preserve
 `internal/foundation/TestOneInvariantAcrossTwoDeploymentModels` as the proof of that claim.
 
-`replica-local-authority` is a draft warning backed by semantic fixtures, not yet a source-backed product claim. The
-next policy milestone should test process-local coordination under multiple instances. Do not add more timer-shaped
-rules merely to grow the catalog.
+The coordination proof uses the separate Semgrep adapter, a narrow provider-side source rule, one shared policy, and
+replicated/single-instance deployment models under `examples/process-local-coordination/`. Error severity requires a
+high-confidence fact with deployment-wide required scope. `replica-local-authority` remains a warning; a local cache
+under multiple replicas is not by itself an error. Do not add named lock, dedupe, uniqueness, or leadership variants
+until a real source example requires a distinct semantic fact or message.
 
 ## Architectural ownership
 

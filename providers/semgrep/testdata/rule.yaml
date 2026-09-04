@@ -1,0 +1,34 @@
+rules:
+  - id: waldo.test.typescript.process-local-state-handoff
+    languages: [typescript]
+    severity: INFO
+    message: Module-local mutable state is exposed as an authoritative predicate.
+    metadata:
+      waldo:
+        id: typescript.process-local-state-handoff
+        kind: coordination
+        symbolMetavariable: $STATE
+        attributes:
+          coordination.authority: process-local
+          coordination.confidence: high
+          coordination.requiredScope: deployment
+          coordination.scope: cross-request
+          coordination.semantics: state-handoff
+          language: typescript
+    patterns:
+      - pattern: |
+          const $STATE: $TYPE = {};
+          ...
+          export const $WRITE = (...) => {
+            ...
+            $STATE[$KEY] = $VALUE;
+            ...
+          };
+          ...
+          export const $READ = (...) => {
+            ...
+            return $STATE[$READ_KEY];
+          };
+      - metavariable-regex:
+          metavariable: $READ
+          regex: ^has[A-Z].*

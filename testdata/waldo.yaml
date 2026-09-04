@@ -7,6 +7,8 @@ deployment:
       facts:
         process.restartable: true
         process.replicas: 3
+        process.instances.concurrent: 3
+        memory.scope: instance
         scheduling.processLocal.durable: false
         memory.processLocal.authoritative: false
 
@@ -15,5 +17,6 @@ providers: []
 policyFiles:
   - ../policies/durable-deferred-execution.yaml
   - ../policies/replica-local-authority.yaml
+  - ../policies/process-local-coordination.yaml
 
 dispositions: []

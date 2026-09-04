@@ -108,3 +108,72 @@ func TestDuplicateProviderIdentityFails(t *testing.T) {
 		t.Fatal("expected duplicate identity error")
 	}
 }
+
+func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
+	fact := model.CodeFact{
+		ID:       "coordination:handoff",
+		Provider: "fixture",
+		Kind:     "coordination",
+		Source:   model.SourceLocation{Path: "src/state.example"},
+		Attributes: map[string]any{
+			"coordination.authority":     "process-local",
+			"coordination.confidence":    "high",
+			"coordination.requiredScope": "deployment",
+			"coordination.scope":         "cross-request",
+		},
+	}
+	rule := config.Policy{
+		ID:       "process-local-coordination",
+		Title:    "Process-local authority cannot coordinate concurrent instances",
+		Severity: model.SeverityError,
+		When: config.Conditions{
+			Deployment: map[string]any{
+				"process.instances.concurrent": map[string]any{"greaterThan": 1},
+				"memory.scope":                 "instance",
+			},
+			Code: config.CodeConditions{Kind: "coordination", Attributes: map[string]any{
+				"coordination.authority":     "process-local",
+				"coordination.confidence":    "high",
+				"coordination.requiredScope": "deployment",
+				"coordination.scope":         "cross-request",
+			}},
+		},
+		Message: "Cross-request coordination relies on instance-local authority.",
+	}
+
+	tests := []struct {
+		name        string
+		facts       []model.CodeFact
+		concurrency int
+		memoryScope string
+		want        int
+	}{
+		{name: "both match", facts: []model.CodeFact{fact}, concurrency: 3, memoryScope: "instance", want: 1},
+		{name: "code missing", concurrency: 3, memoryScope: "instance", want: 0},
+		{name: "single instance", facts: []model.CodeFact{fact}, concurrency: 1, memoryScope: "instance", want: 0},
+		{name: "shared memory", facts: []model.CodeFact{fact}, concurrency: 3, memoryScope: "deployment", want: 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configuration := config.Config{
+				Policies: []config.Policy{rule},
+				Deployment: config.Deployment{Units: map[string]config.DeploymentUnit{
+					"worker": {
+						CodeRoots: []string{"src"},
+						Facts: map[string]any{
+							"process.instances.concurrent": test.concurrency,
+							"memory.scope":                 test.memoryScope,
+						},
+					},
+				}},
+			}
+			findings, err := Evaluate(configuration, test.facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(findings) != test.want {
+				t.Fatalf("got %d findings, want %d", len(findings), test.want)
+			}
+		})
+	}
+}
