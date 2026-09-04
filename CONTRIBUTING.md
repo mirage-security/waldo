@@ -38,6 +38,19 @@ Not a core invariant:
 
 > Do not use a particular timer API.
 
+Not a core invariant:
+
+> Do not reuse state after an asynchronous yield without revalidation.
+
+The source shape alone belongs in an analyzer. A possible core invariant is narrower:
+
+> An atomic read-modify-write operation cannot cross a boundary that admits competing execution against the same
+> authority.
+
+That conclusion requires provider facts about the read, dependent write, and suspension; execution and deployment
+facts establishing that the suspension admits contenders sharing the authority; and an architectural requirement for
+atomicity. A runtime that preserves exclusive ownership through the operation must not produce the finding.
+
 ## Policy shape
 
 Every policy should be explainable in this form:
