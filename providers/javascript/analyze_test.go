@@ -19,8 +19,19 @@ func TestAssignedAsyncTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := Analyze(context.Background(), root, Options{
+	allFacts, err := Analyze(context.Background(), root, Options{
 		Targets: []string{"providers/javascript/testdata"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allFacts) != 2 {
+		t.Fatalf("got %d facts without exclusions, want 2: %#v", len(allFacts), allFacts)
+	}
+
+	facts, err := Analyze(context.Background(), root, Options{
+		Targets:  []string{"providers/javascript/testdata"},
+		Excludes: []string{"**/*.test.ts"},
 	})
 	if err != nil {
 		t.Fatal(err)

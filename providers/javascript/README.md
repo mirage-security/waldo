@@ -26,7 +26,13 @@ providers:
       - waldo-javascript-provider
       - --target
       - services/worker/src
+      - --exclude
+      - "**/*.test.ts"
 ```
+
+Targets and exclusions select source owned by the deployed unit; repeat either flag as needed. Exclusions are
+provider configuration rather than backend configuration, so consumers do not depend on Semgrep's private rule
+format.
 
 Semgrep CE must currently be available to the provider process, but it is an implementation detail. The backend can
 be replaced without changing emitted facts, deployment models, policies, or findings.

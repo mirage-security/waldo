@@ -33,8 +33,10 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 	flags := flag.NewFlagSet("waldo-javascript-provider", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var targets values
+	var excludes values
 	var executable string
 	flags.Var(&targets, "target", "root-relative scan target (repeatable; defaults to .)")
+	flags.Var(&excludes, "exclude", "root-relative scan exclusion (repeatable)")
 	flags.StringVar(&executable, "semgrep", "semgrep", "Semgrep executable")
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -66,6 +68,7 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 	facts, err := javascriptprovider.Analyze(ctx, request.Root, javascriptprovider.Options{
 		SemgrepExecutable: executable,
 		Targets:           targets,
+		Excludes:          excludes,
 	})
 	if err != nil {
 		return err

@@ -43,6 +43,7 @@ type Options struct {
 	Executable string
 	Configs    []string
 	Targets    []string
+	Excludes   []string
 }
 
 func Analyze(ctx context.Context, root string, options Options) ([]protocol.CodeFact, error) {
@@ -59,6 +60,9 @@ func Analyze(ctx context.Context, root string, options Options) ([]protocol.Code
 	arguments := []string{"scan", "--json", "--quiet", "--metrics=off", "--disable-version-check"}
 	for _, config := range options.Configs {
 		arguments = append(arguments, "--config", config)
+	}
+	for _, exclude := range options.Excludes {
+		arguments = append(arguments, "--exclude", exclude)
 	}
 	arguments = append(arguments, options.Targets...)
 	command := exec.CommandContext(ctx, options.Executable, arguments...)
