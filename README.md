@@ -115,6 +115,15 @@ the identity.
 See [the provider protocol](docs/provider-protocol.md) and [architecture notes](docs/architecture.md) for the boundary
 contracts.
 
+## Policy contribution boundary
+
+Only cross-boundary architectural invariants belong in Waldo core: the conclusion must require both code facts and
+deployment facts. A core policy must also be phrased without naming a programming-language API or infrastructure
+product. Checks that need no deployment context belong in analyzers; product recommendations belong in integrations.
+
+The full admission test, evidence matrix, and severity criteria are in [CONTRIBUTING.md](CONTRIBUTING.md). The small
+current and proposed rule families are tracked in the [policy taxonomy](docs/policy-taxonomy.md).
+
 ## Findings and CI
 
 Severity and disposition are separate:
