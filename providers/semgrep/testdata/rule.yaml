@@ -2,12 +2,12 @@ rules:
   - id: waldo.test.typescript.process-local-state-handoff
     languages: [typescript]
     severity: INFO
-    message: Module-local mutable state is exposed as an authoritative predicate.
+    message: "waldo-symbol:$STATE"
     metadata:
       waldo:
         id: typescript.process-local-state-handoff
         kind: coordination
-        symbolMetavariable: $STATE
+        symbolMessagePrefix: "waldo-symbol:"
         attributes:
           coordination.authority: process-local
           coordination.confidence: high

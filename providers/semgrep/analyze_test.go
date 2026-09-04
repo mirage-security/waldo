@@ -34,6 +34,17 @@ func TestDecodeAnnotatedResult(t *testing.T) {
 	}
 }
 
+func TestDecodeAnnotatedResultFromMessage(t *testing.T) {
+	data := []byte(`{"results":[{"check_id":"path.prefix.rule","path":"src/state.ts","start":{"line":12,"col":1},"extra":{"message":"waldo-symbol:active","metadata":{"waldo":{"id":"typescript.state-handoff","kind":"coordination","symbolMessagePrefix":"waldo-symbol:","attributes":{"coordination.authority":"process-local"}}}}}],"errors":[]}`)
+	facts, err := Decode("/repo", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(facts) != 1 || facts[0].Symbol != "active" {
+		t.Fatalf("unexpected facts: %#v", facts)
+	}
+}
+
 func TestDecodeIgnoresUnannotatedResult(t *testing.T) {
 	data := []byte(`{"results":[{"check_id":"ordinary.lint","path":"src/state.ts","start":{"line":1,"col":1},"extra":{"metadata":{},"metavars":{}}}],"errors":[]}`)
 	facts, err := Decode("/repo", data)

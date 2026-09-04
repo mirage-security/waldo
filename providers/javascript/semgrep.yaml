@@ -2,12 +2,12 @@ rules:
   - id: waldo.javascript.assigned-async-timeout
     languages: [javascript, typescript]
     severity: INFO
-    message: Deferred asynchronous work uses a process-local timer.
+    message: "waldo-symbol:$TIMER"
     metadata:
       waldo:
         id: javascript.assigned-async-timeout
         kind: deferred-execution
-        symbolMetavariable: $TIMER
+        symbolMessagePrefix: "waldo-symbol:"
         attributes:
           execution.authority: process-local
           execution.callback: async
