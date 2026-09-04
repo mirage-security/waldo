@@ -1,0 +1,1 @@
+{"id":"authority:framework-prefill","provider":"fixture","kind":"state-dependent-decision","source":{"path":"src/framework/dispatch.example","line":58},"symbol":"dispatch","attributes":{"state.scope":"process-local","decision.authoritative":true,"provenance.confidence":"bounded"}}

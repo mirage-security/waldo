@@ -1,0 +1,1 @@
+{"id":"authority:local-session-decision","provider":"fixture","kind":"state-dependent-decision","source":{"path":"src/session/authorize.example","line":17},"symbol":"authorizeSession","attributes":{"state.scope":"process-local","decision.authoritative":true,"provenance.confidence":"bounded"}}

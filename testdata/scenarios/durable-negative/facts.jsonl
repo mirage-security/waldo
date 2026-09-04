@@ -1,0 +1,2 @@
+{"id":"deferred:telemetry-flush","provider":"fixture","kind":"deferred-execution","source":{"path":"src/telemetry/flush.example","line":12},"symbol":"flushTelemetry","attributes":{"correctness.critical":false,"execution.durable":false,"execution.mechanism":"process-local-scheduler"}}
+{"id":"deferred:durable-job","provider":"fixture","kind":"deferred-execution","source":{"path":"src/jobs/reminder.example","line":22},"symbol":"scheduleReminder","attributes":{"correctness.critical":true,"execution.durable":true,"execution.mechanism":"durable-queue"}}

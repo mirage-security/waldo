@@ -1,0 +1,6 @@
+policyId: replica-local-authority
+severity: warning
+disposition: accepted
+reason: The local choice is an intentional optimization with a durable fallback.
+findings: 1
+failing: 0

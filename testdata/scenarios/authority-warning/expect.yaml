@@ -1,0 +1,5 @@
+policyId: replica-local-authority
+severity: warning
+disposition: unresolved
+findings: 1
+failing: 0

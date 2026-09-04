@@ -1,0 +1,5 @@
+policyId: durable-deferred-execution
+severity: error
+disposition: unresolved
+findings: 1
+failing: 1
