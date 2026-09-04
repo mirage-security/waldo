@@ -10,13 +10,26 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      WALDO_REQUIRE_SEMGREP: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
+      # Semgrep CE runs only embedded local rules. This job has no Semgrep
+      # account token, repository secrets, write permission, or persisted Git
+      # credential. The release is pinned and older than the dependency
+      # cooldown recommended for CI supply-chain changes.
+      - name: Install JavaScript provider backend
+        run: pipx install semgrep==1.173.0
+      - name: Verify JavaScript provider backend
+        run: semgrep --disable-version-check --version
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./cmd/...

@@ -201,3 +201,7 @@ The fixture scenarios cover durable deferred execution, benign deferred work, hi
 coordination, low-confidence local state, replica-local authority, an accepted architectural choice, and a known
 analyzer limitation recorded as a false positive. They express semantic inputs and expected findings rather than
 coupling policy evaluation to a source-language analyzer.
+
+## License
+
+Waldo is available under the [MIT License](LICENSE).

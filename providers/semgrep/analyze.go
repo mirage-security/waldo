@@ -31,6 +31,7 @@ type result struct {
 	Extra struct {
 		Metadata map[string]any          `json:"metadata"`
 		Metavars map[string]metavariable `json:"metavars"`
+		Message  string                  `json:"message"`
 	} `json:"extra"`
 }
 
@@ -55,7 +56,7 @@ func Analyze(ctx context.Context, root string, options Options) ([]protocol.Code
 		options.Targets = []string{"."}
 	}
 
-	arguments := []string{"scan", "--json", "--quiet"}
+	arguments := []string{"scan", "--json", "--quiet", "--metrics=off", "--disable-version-check"}
 	for _, config := range options.Configs {
 		arguments = append(arguments, "--config", config)
 	}
@@ -112,12 +113,28 @@ func factFromResult(root string, candidate result) (protocol.CodeFact, bool, err
 	factType, _ := metadata["kind"].(string)
 	ruleID, _ := metadata["id"].(string)
 	symbolVariable, _ := metadata["symbolMetavariable"].(string)
-	if strings.TrimSpace(factType) == "" || strings.TrimSpace(ruleID) == "" || strings.TrimSpace(symbolVariable) == "" {
-		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q metadata.waldo requires id, kind, and symbolMetavariable", candidate.CheckID)
+	symbolMessagePrefix, _ := metadata["symbolMessagePrefix"].(string)
+	if strings.TrimSpace(factType) == "" || strings.TrimSpace(ruleID) == "" {
+		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q metadata.waldo requires id and kind", candidate.CheckID)
 	}
-	matched, exists := candidate.Extra.Metavars[symbolVariable]
-	if !exists || strings.TrimSpace(matched.AbstractContent) == "" {
-		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q did not bind symbol metavariable %q", candidate.CheckID, symbolVariable)
+	if (strings.TrimSpace(symbolVariable) == "") == (strings.TrimSpace(symbolMessagePrefix) == "") {
+		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q metadata.waldo requires exactly one of symbolMetavariable or symbolMessagePrefix", candidate.CheckID)
+	}
+
+	symbol := ""
+	if symbolMessagePrefix != "" {
+		if !strings.HasPrefix(candidate.Extra.Message, symbolMessagePrefix) {
+			return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q message does not start with symbol prefix %q", candidate.CheckID, symbolMessagePrefix)
+		}
+		symbol = strings.TrimSpace(strings.TrimPrefix(candidate.Extra.Message, symbolMessagePrefix))
+	} else {
+		matched, exists := candidate.Extra.Metavars[symbolVariable]
+		if exists {
+			symbol = strings.TrimSpace(matched.AbstractContent)
+		}
+	}
+	if symbol == "" {
+		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep rule %q did not emit a semantic symbol", candidate.CheckID)
 	}
 	attributes := map[string]any{}
 	if rawAttributes, exists := metadata["attributes"]; exists {
@@ -140,7 +157,6 @@ func factFromResult(root string, candidate result) (protocol.CodeFact, bool, err
 	if path == ".." || strings.HasPrefix(path, "../") {
 		return protocol.CodeFact{}, false, fmt.Errorf("Semgrep result path %q is outside root", candidate.Path)
 	}
-	symbol := matched.AbstractContent
 	return protocol.CodeFact{
 		ID:         strings.Join([]string{"semgrep", ruleID, path, symbol}, ":"),
 		Kind:       factType,

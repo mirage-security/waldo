@@ -9,15 +9,21 @@ metadata:
   waldo:
     id: typescript.process-local-state-handoff
     kind: coordination
-    symbolMetavariable: $STATE
+    symbolMessagePrefix: "waldo-symbol:"
     attributes:
       coordination.authority: process-local
       coordination.confidence: high
       coordination.scope: cross-request
 ```
 
-The `id`, root-relative source path, and bound symbol form a stable fact identity; source coordinates are evidence only.
-Rules must therefore choose a semantic `symbolMetavariable` that is unique per result and stable across line movement.
+Set the Semgrep rule message to the same fixed prefix followed by a metavariable, for example
+`message: "waldo-symbol:$STATE"`. The adapter strips the declared prefix from Semgrep's expanded result message. This
+works with token-free Semgrep CE, whose CI output may omit the separate `extra.metavars` object. The older
+`symbolMetavariable` metadata remains supported when that object is available, but a rule must configure exactly one
+symbol source.
+
+The `id`, root-relative source path, and extracted symbol form a stable fact identity; source coordinates are evidence
+only. Rules must therefore choose a semantic symbol that is unique per result and stable across line movement.
 Duplicate identities fail the provider instead of silently producing unstable findings.
 
 Configure the adapter as an external provider:

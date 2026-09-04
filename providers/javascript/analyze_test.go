@@ -2,6 +2,7 @@ package javascript
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,9 @@ import (
 
 func TestAssignedAsyncTimeout(t *testing.T) {
 	if _, err := exec.LookPath("semgrep"); err != nil {
+		if os.Getenv("WALDO_REQUIRE_SEMGREP") == "1" {
+			t.Fatal("semgrep is required for JavaScript provider integration tests")
+		}
 		t.Skip("semgrep is not installed")
 	}
 	root, err := filepath.Abs(filepath.Join("..", ".."))
