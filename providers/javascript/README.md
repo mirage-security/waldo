@@ -31,6 +31,11 @@ providers:
 Semgrep CE must currently be available to the provider process, but it is an implementation detail. The backend can
 be replaced without changing emitted facts, deployment models, policies, or findings.
 
+Repository CI installs a pinned Semgrep CE release and requires the source fixture test to execute. The scan uses
+only the provider's embedded local rules, disables metrics and version checks, and needs no Semgrep account or token.
+Local Go test runs may skip that integration test when Semgrep is unavailable; users still invoke `waldo check`, not
+Semgrep directly.
+
 The first rule deliberately covers assigned inline async callbacks. Wrapper functions, separately declared
 callbacks, unassigned timers, intervals, cron libraries, and criticality classification remain explicit false-negative
 boundaries until real source examples justify broader provider support.

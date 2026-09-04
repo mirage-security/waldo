@@ -55,7 +55,7 @@ func Analyze(ctx context.Context, root string, options Options) ([]protocol.Code
 		options.Targets = []string{"."}
 	}
 
-	arguments := []string{"scan", "--json", "--quiet"}
+	arguments := []string{"scan", "--json", "--quiet", "--metrics=off", "--disable-version-check"}
 	for _, config := range options.Configs {
 		arguments = append(arguments, "--config", config)
 	}
