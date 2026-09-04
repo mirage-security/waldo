@@ -41,7 +41,9 @@ architectural failures.
 
 The executable foundation proofs use a Go-specific provider and a separate Semgrep adapter. The adapter translates
 only analyzer rules with explicit Waldo metadata and leaves parsing, discovery, syntax, and concrete APIs in Semgrep.
-Core imports neither provider. Another analyzer can replace either while emitting the same fact shape.
+The JavaScript provider packages generic language rules behind its provider command and currently delegates to that
+adapter internally. Consumers do not configure Semgrep for built-in language facts. Core imports none of these
+providers, and another analyzer can replace a backend while emitting the same fact shape.
 
 ## Stable identities
 

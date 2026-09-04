@@ -1,0 +1,25 @@
+rules:
+  - id: waldo.javascript.assigned-async-timeout
+    languages: [javascript, typescript]
+    severity: INFO
+    message: Deferred asynchronous work uses a process-local timer.
+    metadata:
+      waldo:
+        id: javascript.assigned-async-timeout
+        kind: deferred-execution
+        symbolMetavariable: $TIMER
+        attributes:
+          execution.authority: process-local
+          execution.callback: async
+          execution.scheduler: timer
+    patterns:
+      - pattern-either:
+          - pattern: const $TIMER = setTimeout($CALLBACK, ...);
+          - pattern: let $TIMER = setTimeout($CALLBACK, ...);
+          - pattern: var $TIMER = setTimeout($CALLBACK, ...);
+          - pattern: const $TIMER = globalThis.setTimeout($CALLBACK, ...);
+          - pattern: let $TIMER = globalThis.setTimeout($CALLBACK, ...);
+          - pattern: var $TIMER = globalThis.setTimeout($CALLBACK, ...);
+      - metavariable-regex:
+          metavariable: $CALLBACK
+          regex: ^async\b

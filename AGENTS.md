@@ -35,6 +35,8 @@ until a real source example requires a distinct semantic fact or message.
   the JSON protocol without importing Waldo internals.
 - `providers/` and provider commands own source syntax, runtime semantics, framework behavior, package discovery, and
   dataflow. Core must not import provider packages.
+- Consumers configure deployment and policy. Built-in providers own generic language-fact extraction and any backend
+  rule files; do not require consumers to copy or author Semgrep configuration for built-in language semantics.
 - `waldo.yaml` and other deployment models own objective deployment properties. They must not contain
   programming-language runtime semantics.
 - `policies/` owns provider-neutral architectural invariants. Policy IDs, matches, messages, and severity are data,
