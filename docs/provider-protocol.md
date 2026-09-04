@@ -19,7 +19,7 @@ The provider writes one JSON object per line to standard output. Standard error 
 non-zero exit or malformed fact fails the scan.
 
 ```json
-{"id":"deferred:checkout-expiry","kind":"deferred-execution","source":{"path":"src/expiry.ts","line":41,"column":3},"symbol":"expireCheckout","attributes":{"correctness.critical":true,"execution.durable":false,"execution.mechanism":"process-local-timer"}}
+{"id":"deferred:checkout-expiry","kind":"deferred-execution","source":{"path":"src/expiry.go","line":41,"column":3},"symbol":"expireCheckout","attributes":{"correctness.critical":true,"execution.authority":"process-local","execution.mechanism":"process-local-timer"}}
 ```
 
 Required fields are:
@@ -30,6 +30,9 @@ Required fields are:
 
 `source.line`, `source.column`, `symbol`, and `attributes` are optional evidence. Provider names are supplied by the
 Waldo configuration and override any `provider` value emitted by the process.
+
+Go providers may import `github.com/mirage-security/waldo/protocol` for the versioned request and fact types. Providers
+in every other language use the same JSON contract; the Go package is a convenience, not a required SDK.
 
 Provider selection is policy-specific. A structural matcher can emit `deferred-execution` facts; richer provenance or
 dataflow may warrant OpenGrep or a language-specific analyzer. The transport contract does not privilege one engine.

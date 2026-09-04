@@ -4,8 +4,8 @@ Waldo owns orchestration and evaluation, not source-language analysis.
 
 ```text
 waldo.yaml deployment units ─┐
-                             ├─ generic policy join ─ dispositions ─ findings/report/exit
-provider JSONL code facts ───┘
+provider JSONL code facts ───┼─ generic policy join ─ dispositions ─ findings/report/exit
+shared policy documents ─────┘
 ```
 
 ## Boundaries
@@ -21,6 +21,9 @@ provider JSONL code facts ───┘
 The same source root may belong to more than one deployment unit. Waldo evaluates a separate finding for each unit
 because the architectural consequence may differ with deployment facts.
 
+Policy documents can be referenced by multiple `waldo.yaml` files. Paths are resolved relative to the model file,
+making reuse explicit and allowing deployment models to vary independently from an invariant.
+
 ## Initial semantic policies
 
 The example configuration records two reusable invariants:
@@ -33,6 +36,10 @@ The example configuration records two reusable invariants:
 
 These policies deliberately do not imply that all deferred work is correctness-critical or all local caches are
 architectural failures.
+
+The executable foundation proof uses a Go-specific provider solely because Go's AST tooling is available without
+embedding an analyzer in core. That provider imports the public protocol package; core never imports the provider.
+Another analyzer can replace it while emitting the same fact shape.
 
 ## Stable identities
 

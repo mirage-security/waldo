@@ -1,8 +1,12 @@
 package model
 
-import "time"
+import (
+	"time"
 
-const SchemaVersion = 1
+	"github.com/mirage-security/waldo/protocol"
+)
+
+const SchemaVersion = protocol.Version
 
 type Severity string
 
@@ -28,22 +32,8 @@ func (d Disposition) Valid() bool {
 	return d == DispositionUnresolved || d == DispositionAccepted || d == DispositionFalsePositive
 }
 
-type SourceLocation struct {
-	Path   string `json:"path" yaml:"path"`
-	Line   int    `json:"line,omitempty" yaml:"line,omitempty"`
-	Column int    `json:"column,omitempty" yaml:"column,omitempty"`
-}
-
-// CodeFact is the provider-neutral record consumed by Waldo. ID is a stable,
-// provider-owned semantic identity; it must not depend on a source line number.
-type CodeFact struct {
-	ID         string         `json:"id" yaml:"id"`
-	Provider   string         `json:"provider,omitempty" yaml:"provider,omitempty"`
-	Kind       string         `json:"kind" yaml:"kind"`
-	Source     SourceLocation `json:"source" yaml:"source"`
-	Symbol     string         `json:"symbol,omitempty" yaml:"symbol,omitempty"`
-	Attributes map[string]any `json:"attributes,omitempty" yaml:"attributes,omitempty"`
-}
+type SourceLocation = protocol.SourceLocation
+type CodeFact = protocol.CodeFact
 
 type Finding struct {
 	ID                string         `json:"id"`

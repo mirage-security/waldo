@@ -1,0 +1,16 @@
+version: 1
+
+policies:
+  - id: durable-deferred-execution
+    title: Correctness-critical deferred execution must be durable
+    severity: error
+    when:
+      deployment:
+        process.restartable: true
+        scheduling.processLocal.durable: false
+      code:
+        kind: deferred-execution
+        attributes:
+          correctness.critical: true
+          execution.authority: process-local
+    message: Correctness-critical deferred work depends on non-durable process-local scheduling.

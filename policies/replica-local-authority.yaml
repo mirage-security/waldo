@@ -1,0 +1,17 @@
+version: 1
+
+policies:
+  - id: replica-local-authority
+    title: Replica-local state may be acting as authority
+    severity: warning
+    when:
+      deployment:
+        process.replicas:
+          greaterThan: 1
+        memory.processLocal.authoritative: false
+      code:
+        kind: state-dependent-decision
+        attributes:
+          state.scope: process-local
+          decision.authoritative: true
+    message: A decision may depend on replica-local state in a multi-replica deployment.

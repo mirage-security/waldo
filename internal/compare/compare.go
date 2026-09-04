@@ -28,6 +28,9 @@ func Reports(base, head model.Report) Result {
 		SchemaVersion: model.SchemaVersion,
 		BaseSummary:   base.Summary,
 		HeadSummary:   head.Summary,
+		Introduced:    make([]model.Finding, 0),
+		Resolved:      make([]model.Finding, 0),
+		Changed:       make([]FindingChange, 0),
 	}
 	baseByID := byID(base.Findings)
 	headByID := byID(head.Findings)

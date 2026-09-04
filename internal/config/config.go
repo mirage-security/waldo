@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/mirage-security/waldo/internal/model"
@@ -17,8 +18,14 @@ type Config struct {
 	Version      int                  `yaml:"version"`
 	Deployment   Deployment           `yaml:"deployment"`
 	Providers    []Provider           `yaml:"providers,omitempty"`
-	Policies     []Policy             `yaml:"policies"`
+	PolicyFiles  []string             `yaml:"policyFiles,omitempty"`
+	Policies     []Policy             `yaml:"policies,omitempty"`
 	Dispositions []FindingDisposition `yaml:"dispositions,omitempty"`
+}
+
+type PolicyDocument struct {
+	Version  int      `yaml:"version"`
+	Policies []Policy `yaml:"policies"`
 }
 
 type Deployment struct {
@@ -66,31 +73,96 @@ func Load(path string) (Config, error) {
 	}
 	defer file.Close()
 
-	config, err := Decode(file)
+	configuration, err := decodeConfig(file)
 	if err != nil {
 		return Config{}, fmt.Errorf("decode %s: %w", path, err)
 	}
-	return config, nil
+	seenFiles := make(map[string]struct{}, len(configuration.PolicyFiles))
+	for _, configuredPath := range configuration.PolicyFiles {
+		if strings.TrimSpace(configuredPath) == "" {
+			return Config{}, fmt.Errorf("decode %s: policyFiles entries cannot be empty", path)
+		}
+		policyPath := configuredPath
+		if !filepath.IsAbs(policyPath) {
+			policyPath = filepath.Join(filepath.Dir(path), policyPath)
+		}
+		policyPath = filepath.Clean(policyPath)
+		if _, exists := seenFiles[policyPath]; exists {
+			return Config{}, fmt.Errorf("decode %s: duplicate policy file %q", path, configuredPath)
+		}
+		seenFiles[policyPath] = struct{}{}
+		document, err := loadPolicyDocument(policyPath)
+		if err != nil {
+			return Config{}, fmt.Errorf("load policy file %s: %w", policyPath, err)
+		}
+		configuration.Policies = append(configuration.Policies, document.Policies...)
+	}
+	if err := configuration.Validate(); err != nil {
+		return Config{}, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return configuration, nil
 }
 
 func Decode(reader io.Reader) (Config, error) {
-	decoder := yaml.NewDecoder(reader)
-	decoder.KnownFields(true)
-	var config Config
-	if err := decoder.Decode(&config); err != nil {
+	configuration, err := decodeConfig(reader)
+	if err != nil {
 		return Config{}, err
 	}
+	if len(configuration.PolicyFiles) > 0 {
+		return Config{}, fmt.Errorf("policyFiles require loading configuration from a file path")
+	}
+	if err := configuration.Validate(); err != nil {
+		return Config{}, err
+	}
+	return configuration, nil
+}
+
+func decodeConfig(reader io.Reader) (Config, error) {
+	decoder := yaml.NewDecoder(reader)
+	decoder.KnownFields(true)
+	var configuration Config
+	if err := decoder.Decode(&configuration); err != nil {
+		return Config{}, err
+	}
+	if err := requireYAMLEOF(decoder, "configuration"); err != nil {
+		return Config{}, err
+	}
+	return configuration, nil
+}
+
+func loadPolicyDocument(path string) (PolicyDocument, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return PolicyDocument{}, err
+	}
+	defer file.Close()
+	decoder := yaml.NewDecoder(file)
+	decoder.KnownFields(true)
+	var document PolicyDocument
+	if err := decoder.Decode(&document); err != nil {
+		return PolicyDocument{}, err
+	}
+	if err := requireYAMLEOF(decoder, "policy file"); err != nil {
+		return PolicyDocument{}, err
+	}
+	if document.Version != model.SchemaVersion {
+		return PolicyDocument{}, fmt.Errorf("version must be %d", model.SchemaVersion)
+	}
+	if len(document.Policies) == 0 {
+		return PolicyDocument{}, fmt.Errorf("policies must contain at least one policy")
+	}
+	return document, nil
+}
+
+func requireYAMLEOF(decoder *yaml.Decoder, documentName string) error {
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err != nil {
-			return Config{}, err
+			return err
 		}
-		return Config{}, fmt.Errorf("configuration must contain exactly one YAML document")
+		return fmt.Errorf("%s must contain exactly one YAML document", documentName)
 	}
-	if err := config.Validate(); err != nil {
-		return Config{}, err
-	}
-	return config, nil
+	return nil
 }
 
 func (c Config) Validate() error {

@@ -49,7 +49,7 @@ bin/waldo compare --base base.report.json --head head.report.json --json
 
 ## Configuration model
 
-[`waldo.yaml`](waldo.yaml) is a runnable, provider-free example. A deployment unit maps code paths to objective facts:
+[`waldo.yaml`](waldo.yaml) is the provider-free root model. A deployment unit maps code paths to objective facts:
 
 ```yaml
 deployment:
@@ -65,19 +65,12 @@ deployment:
 Policies are data. Waldo core does not hard-code rule IDs or analyzer-specific syntax:
 
 ```yaml
-policies:
-  - id: durable-deferred-execution
-    severity: error
-    when:
-      deployment:
-        process.restartable: true
-        scheduling.processLocal.durable: false
-      code:
-        kind: deferred-execution
-        attributes:
-          correctness.critical: true
-          execution.durable: false
+policyFiles:
+  - policies/durable-deferred-execution.yaml
 ```
+
+Policy files are resolved relative to the `waldo.yaml` file. Inline `policies` remain supported for self-contained
+models, while shared files let multiple deployment models prove the same invariant without copying or changing it.
 
 Conditions accept exact scalar values and the operators `equals`, `notEquals`, `greaterThan`,
 `greaterThanOrEqual`, `lessThan`, `lessThanOrEqual`, and `oneOf`.
@@ -98,6 +91,20 @@ the identity.
 
 See [the provider protocol](docs/provider-protocol.md) and [architecture notes](docs/architecture.md) for the boundary
 contracts.
+
+## Executable foundation proof
+
+The [durable deferred-work example](examples/durable-deferred-work/README.md) analyzes standalone Go source through a
+separate Go AST provider. It evaluates one unchanged shared policy against two deployment models: an orchestrated
+container service and a request-scoped function runtime. Both produce exactly one unresolved error; an unannotated
+best-effort timer produces a code fact but no finding.
+
+The foundation test executes both provider processes and asserts that the models load an identical policy and produce
+the same stable finding identity:
+
+```sh
+go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
+```
 
 ## Development
 

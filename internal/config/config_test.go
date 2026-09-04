@@ -1,9 +1,20 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestLoadResolvesSharedPolicyFiles(t *testing.T) {
+	configuration, err := Load(filepath.Join("..", "..", "waldo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.PolicyFiles) != 2 || len(configuration.Policies) != 2 {
+		t.Fatalf("unexpected shared policies: %#v", configuration)
+	}
+}
 
 func TestDecodeRejectsUnknownFields(t *testing.T) {
 	input := `

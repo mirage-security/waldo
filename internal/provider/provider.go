@@ -14,12 +14,8 @@ import (
 
 	"github.com/mirage-security/waldo/internal/config"
 	"github.com/mirage-security/waldo/internal/model"
+	"github.com/mirage-security/waldo/protocol"
 )
-
-type Request struct {
-	ProtocolVersion int    `json:"protocolVersion"`
-	Root            string `json:"root"`
-}
 
 func Collect(ctx context.Context, root string, providers []config.Provider) ([]model.CodeFact, error) {
 	var facts []model.CodeFact
@@ -34,7 +30,7 @@ func Collect(ctx context.Context, root string, providers []config.Provider) ([]m
 }
 
 func run(ctx context.Context, root string, provider config.Provider) ([]model.CodeFact, error) {
-	request, err := json.Marshal(Request{ProtocolVersion: model.SchemaVersion, Root: root})
+	request, err := json.Marshal(protocol.Request{ProtocolVersion: protocol.Version, Root: root})
 	if err != nil {
 		return nil, err
 	}

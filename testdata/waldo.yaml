@@ -12,34 +12,8 @@ deployment:
 
 providers: []
 
-policies:
-  - id: durable-deferred-execution
-    title: Correctness-critical deferred execution must be durable
-    severity: error
-    when:
-      deployment:
-        process.restartable: true
-        scheduling.processLocal.durable: false
-      code:
-        kind: deferred-execution
-        attributes:
-          correctness.critical: true
-          execution.durable: false
-    message: Correctness-critical deferred work depends on non-durable process-local scheduling.
-
-  - id: replica-local-authority
-    title: Replica-local state may be acting as authority
-    severity: warning
-    when:
-      deployment:
-        process.replicas:
-          greaterThan: 1
-        memory.processLocal.authoritative: false
-      code:
-        kind: state-dependent-decision
-        attributes:
-          state.scope: process-local
-          decision.authoritative: true
-    message: A decision may depend on replica-local state in a multi-replica deployment.
+policyFiles:
+  - ../policies/durable-deferred-execution.yaml
+  - ../policies/replica-local-authority.yaml
 
 dispositions: []

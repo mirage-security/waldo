@@ -19,7 +19,7 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 		dispositions[disposition.Finding] = disposition
 	}
 
-	var findings []model.Finding
+	findings := make([]model.Finding, 0)
 	seenFindingIDs := make(map[string]struct{})
 	for _, fact := range facts {
 		units := matchingUnits(configuration.Deployment.Units, fact.Source.Path)

@@ -102,7 +102,7 @@ func TestDuplicateProviderIdentityFails(t *testing.T) {
 	fact := model.CodeFact{
 		ID: "deferred:duplicate", Provider: "fixture", Kind: "deferred-execution",
 		Source:     model.SourceLocation{Path: "src/work.example"},
-		Attributes: map[string]any{"correctness.critical": true, "execution.durable": false},
+		Attributes: map[string]any{"correctness.critical": true, "execution.authority": "process-local"},
 	}
 	if _, err := Evaluate(configuration, []model.CodeFact{fact, fact}); err == nil {
 		t.Fatal("expected duplicate identity error")

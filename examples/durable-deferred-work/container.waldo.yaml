@@ -1,0 +1,20 @@
+version: 1
+
+deployment:
+  units:
+    expiry-notifier:
+      codeRoots: [examples/durable-deferred-work/app]
+      facts:
+        platform.executionModel: orchestrated-container
+        process.restartable: true
+        process.replicas: 3
+        scheduling.processLocal.durable: false
+
+providers:
+  - name: go-ast
+    command: [go, run, ./cmd/waldo-go-ast-provider]
+
+policyFiles:
+  - ../../policies/durable-deferred-execution.yaml
+
+dispositions: []
