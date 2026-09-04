@@ -1,55 +1,78 @@
 # Waldo
 
-Waldo finds architectural mismatches by joining four independent inputs:
+Waldo evaluates architectural invariants by combining facts about code with facts about how that code is deployed.
+
+Static analysis can tell you that code schedules deferred work. It cannot, by itself, tell you whether that work
+survives the way the process is run. A deployment model can say that processes are restartable and local scheduling
+is non-durable. It cannot, by itself, identify which source operation carries a product guarantee. Waldo joins those
+facts through an architectural policy and reports the consequence.
+
+## The proof
+
+The repository contains one source-backed invariant:
+
+> Correctness-critical deferred work must not depend on process-local scheduling when its execution authority is
+> restartable.
+
+The standalone [example source](examples/durable-deferred-work/app/expiry.go) contains two Go `time.AfterFunc` calls.
+A separate [Go AST provider](providers/goast/README.md) reports both as process-local deferred execution, but marks only
+the explicitly declared expiry notification as correctness-critical. The best-effort telemetry timer is a code fact,
+not a finding.
+
+One unchanged [policy document](policies/durable-deferred-execution.yaml) evaluates that code against two distinct
+deployment models:
+
+| Input | Container service | Function runtime |
+| --- | --- | --- |
+| Code facts | Same provider output | Same provider output |
+| Execution model | `orchestrated-container` | `request-scoped-function` |
+| Restartable process | `true` | `true` |
+| Process-local scheduling durable | `false` | `false` |
+| Policy | Same shared file | Same shared file |
+| Result | One unresolved error | One unresolved error |
+
+Run the proof from the repository root:
+
+```sh
+go run ./cmd/waldo check \
+  --root . \
+  --config examples/durable-deferred-work/container.waldo.yaml
+
+go run ./cmd/waldo check \
+  --root . \
+  --config examples/durable-deferred-work/function.waldo.yaml
+```
+
+Both commands intentionally exit `1`: each produces the same stable `durable-deferred-execution` finding. The
+[foundation test](internal/foundation/foundation_test.go) executes both provider processes and verifies that the two
+models load an identical policy and produce an identical finding identity:
+
+```sh
+go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
+```
+
+This is the current foundation claim. Waldo is not claiming a broad rule catalog yet.
+
+## How Waldo reaches a finding
+
+Four independent inputs remain visible in the result:
 
 ```text
 deployment facts + code facts + architectural policy + human disposition -> findings
 ```
 
-The core is language- and analyzer-agnostic. OpenGrep, GritQL, compiler-backed analyzers, and small structural scanners
-can all act as code-fact providers through the same JSONL process protocol. JavaScript runtime semantics, language
-parsing, and framework behavior belong in those providers—not in the deployment model or Waldo core.
+- Deployment facts describe objective properties of deployed units. They contain no source-language semantics.
+- Code facts come from replaceable analyzers. They contain no assumptions about the deployment.
+- Policies express architectural invariants as joins over both sets of facts.
+- Dispositions record a human decision about one stable finding. They do not rewrite facts or weaken a policy.
 
-## Status
+Waldo core is language- and analyzer-agnostic. OpenGrep, GritQL, compiler-backed analyzers, and small structural
+scanners can all emit the same versioned [JSONL provider protocol](docs/provider-protocol.md). The in-repository Go
+provider is one proof of that interface; the core binary does not import it.
 
-This is an early standalone implementation. The public deployment-model file is `waldo.yaml`; its schema and the
-provider protocol are both versioned at `1`.
+## Deployment and policy model
 
-## Quick start
-
-Build the CLI:
-
-```sh
-go build -o bin/waldo ./cmd/waldo
-```
-
-After adding at least one provider, run it and evaluate its facts:
-
-```sh
-bin/waldo check --root . --config waldo.yaml
-```
-
-For a deterministic or precomputed scan, bypass configured providers with a JSONL facts file:
-
-```sh
-bin/waldo check --root . --config waldo.yaml --facts facts.jsonl --json
-```
-
-`check` exits `1` only when at least one finding is both `severity: error` and `disposition: unresolved`. Accepted and
-false-positive findings stay in the report as evidence. Configuration, provider, input, and missing fact-source
-failures exit `2`, so an accidentally unconfigured CI scan cannot silently pass.
-
-Compare two check reports to isolate a proposed change from existing debt:
-
-```sh
-bin/waldo compare --base base.report.json --head head.report.json --json
-```
-
-`compare` exits `1` for a newly introduced unresolved error, or when a changed finding becomes an unresolved error.
-
-## Configuration model
-
-[`waldo.yaml`](waldo.yaml) is the provider-free root model. A deployment unit maps code paths to objective facts:
+The public deployment-model file is `waldo.yaml`. A deployment unit maps source roots to objective facts:
 
 ```yaml
 deployment:
@@ -92,19 +115,39 @@ the identity.
 See [the provider protocol](docs/provider-protocol.md) and [architecture notes](docs/architecture.md) for the boundary
 contracts.
 
-## Executable foundation proof
+## Findings and CI
 
-The [durable deferred-work example](examples/durable-deferred-work/README.md) analyzes standalone Go source through a
-separate Go AST provider. It evaluates one unchanged shared policy against two deployment models: an orchestrated
-container service and a request-scoped function runtime. Both produce exactly one unresolved error; an unannotated
-best-effort timer produces a code fact but no finding.
+Severity and disposition are separate:
 
-The foundation test executes both provider processes and asserts that the models load an identical policy and produce
-the same stable finding identity:
+- Severity: `error | warning | info`
+- Disposition: `unresolved | accepted | false-positive`
+
+`waldo check` exits `1` only for unresolved errors. Accepted and false-positive findings remain in the report as
+evidence. Configuration, provider, input, and missing fact-source failures exit `2`, so an accidentally unconfigured
+CI scan cannot silently pass.
+
+For a deterministic or precomputed scan, bypass configured providers with JSONL facts:
 
 ```sh
-go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
+go run ./cmd/waldo check --root . --config waldo.yaml --facts facts.jsonl --json
 ```
+
+`waldo compare` separates introduced, resolved, changed, and unchanged findings so a proposed change can be evaluated
+without conflating it with existing debt:
+
+```sh
+go run ./cmd/waldo compare --base base.report.json --head head.report.json --json
+```
+
+## What should come next
+
+The next source-backed proof should test a different architectural dimension: process-local coordination under
+multiple instances. It should combine a deployment fact such as `process.replicas > 1` with code facts showing local
+state used for locking, deduplication, uniqueness, or another authoritative decision.
+
+A draft `replica-local-authority` policy and semantic fixtures exist, but they are not yet a provider-backed product
+claim. General local-state provenance should begin as a warning; narrower evidence of process-local coordination may
+justify a separate error-level invariant. The next work is to prove that boundary, not add another timer detector.
 
 ## Development
 
