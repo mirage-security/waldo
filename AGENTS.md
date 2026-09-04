@@ -57,6 +57,10 @@ Before adding or changing a core policy, prove all of the following:
 If a check still works after removing deployment context, put it in an analyzer instead of Waldo core. If a check
 still works after removing code context, put it in deployment validation.
 
+For example, stale state reused after an asynchronous yield can fail in one process with one deployed instance. Keep
+that check in a language/runtime analyzer unless an additional architectural conclusion truly requires a declared
+deployment fact; external concurrency alone does not satisfy the admission test.
+
 Every policy contribution needs this executable matrix:
 
 | Code facts | Deployment facts | Expected result |

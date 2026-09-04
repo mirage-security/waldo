@@ -38,6 +38,14 @@ Not a core invariant:
 
 > Do not use a particular timer API.
 
+Not a core invariant:
+
+> Do not reuse state after an asynchronous yield without revalidation.
+
+That race can be wrong in one process with one deployed instance. Language/runtime scheduling facts may be enough to
+reach the conclusion, so the check belongs in an analyzer rather than a core policy. The mere presence of an external
+concurrent actor does not turn a source-level race into a deployment invariant.
+
 ## Policy shape
 
 Every policy should be explainable in this form:
