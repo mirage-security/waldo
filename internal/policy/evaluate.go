@@ -22,11 +22,12 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 	findings := make([]model.Finding, 0)
 	seenFindingIDs := make(map[string]struct{})
 	for _, fact := range facts {
-		units := matchingUnits(configuration.Deployment.Units, fact.Source.Path)
-		for _, unitName := range units {
-			unit := configuration.Deployment.Units[unitName]
+		deployments := matchingDeployments(configuration, fact.Source.Path)
+		for _, deploymentName := range deployments {
+			deployment := configuration.Deployments[deploymentName]
+			deploymentID := configuration.Service + "/" + deploymentName
 			for _, rule := range configuration.Policies {
-				matchedDeployment, matches, err := matchesPolicy(rule, unit, fact)
+				matchedDeployment, matches, err := matchesPolicy(rule, deployment, fact)
 				if err != nil {
 					return nil, fmt.Errorf("policy %q: %w", rule.ID, err)
 				}
@@ -34,12 +35,12 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 					continue
 				}
 				finding := model.Finding{
-					ID:                FindingID(rule.ID, unitName, fact.Provider, fact.ID),
+					ID:                FindingID(rule.ID, deploymentID, fact.Provider, fact.ID),
 					PolicyID:          rule.ID,
 					PolicyTitle:       rule.Title,
 					Severity:          rule.Severity,
 					Disposition:       model.DispositionUnresolved,
-					DeploymentUnit:    unitName,
+					Deployment:        deploymentID,
 					MatchedDeployment: matchedDeployment,
 					CodeFact:          fact,
 					Message:           rule.Message,
@@ -60,18 +61,26 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 	return findings, nil
 }
 
-func FindingID(policyID, deploymentUnit, provider, factID string) string {
+func FindingID(policyID, deployment, provider, factID string) string {
 	digest := sha256.Sum256([]byte(strings.Join([]string{
-		"waldo-finding-v1", policyID, deploymentUnit, provider, factID,
+		"waldo-finding-v2", policyID, deployment, provider, factID,
 	}, "\x00")))
-	return "waldo:v1:" + hex.EncodeToString(digest[:])
+	return "waldo:v2:" + hex.EncodeToString(digest[:])
 }
 
-func matchingUnits(units map[string]config.DeploymentUnit, sourcePath string) []string {
+func matchingDeployments(configuration config.Config, sourcePath string) []string {
 	path := filepath.ToSlash(filepath.Clean(sourcePath))
 	var matches []string
-	for name, unit := range units {
-		root := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(unit.Source.Root)), "/")
+	for name, deployment := range configuration.Deployments {
+		artifact := configuration.Artifacts[deployment.Artifact]
+		root := artifact.ResolvedSource
+		if root == "" {
+			root = artifact.Source
+			if root == "" {
+				root = "."
+			}
+		}
+		root = strings.TrimSuffix(filepath.ToSlash(filepath.Clean(root)), "/")
 		if root == "." || path == root || strings.HasPrefix(path, root+"/") {
 			matches = append(matches, name)
 		}
@@ -80,7 +89,7 @@ func matchingUnits(units map[string]config.DeploymentUnit, sourcePath string) []
 	return matches
 }
 
-func matchesPolicy(rule config.Policy, unit config.DeploymentUnit, fact model.CodeFact) (map[string]any, bool, error) {
+func matchesPolicy(rule config.Policy, deployment config.Deployment, fact model.CodeFact) (map[string]any, bool, error) {
 	if fact.Kind != rule.When.Code.Kind {
 		return nil, false, nil
 	}
@@ -100,7 +109,7 @@ func matchesPolicy(rule config.Policy, unit config.DeploymentUnit, fact model.Co
 
 	matched := make(map[string]any, len(rule.When.Deployment))
 	for key, expected := range rule.When.Deployment {
-		actual, exists := unit.Facts[key]
+		actual, exists := deployment.Facts[key]
 		if !exists {
 			return nil, false, nil
 		}

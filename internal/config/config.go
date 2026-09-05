@@ -16,12 +16,15 @@ import (
 )
 
 type Config struct {
-	Version      int                  `yaml:"version"`
-	Deployment   Deployment           `yaml:"deployment"`
-	Providers    []Provider           `yaml:"providers,omitempty"`
-	PolicyFiles  []string             `yaml:"policyFiles,omitempty"`
-	Policies     []Policy             `yaml:"policies,omitempty"`
-	Dispositions []FindingDisposition `yaml:"dispositions,omitempty"`
+	Version      int                   `yaml:"version"`
+	Service      string                `yaml:"service"`
+	Artifacts    map[string]Artifact   `yaml:"artifacts"`
+	Deployments  map[string]Deployment `yaml:"deployments"`
+	Providers    []Provider            `yaml:"providers,omitempty"`
+	PolicyFiles  []string              `yaml:"policyFiles,omitempty"`
+	Policies     []Policy              `yaml:"policies,omitempty"`
+	Dispositions []FindingDisposition  `yaml:"dispositions,omitempty"`
+	BaseDir      string                `yaml:"-"`
 }
 
 type PolicyDocument struct {
@@ -29,18 +32,23 @@ type PolicyDocument struct {
 	Policies []Policy `yaml:"policies"`
 }
 
+type Artifact struct {
+	Source         string `yaml:"source,omitempty"`
+	Entrypoint     string `yaml:"entrypoint"`
+	ResolvedSource string `yaml:"-"`
+}
+
 type Deployment struct {
-	Units map[string]DeploymentUnit `yaml:"units"`
+	Artifact string              `yaml:"artifact"`
+	From     DeploymentReference `yaml:"from"`
+	Facts    map[string]any      `yaml:"-"`
 }
 
-type DeploymentUnit struct {
-	Source DeploymentSource `yaml:"source"`
-	Facts  map[string]any   `yaml:"facts"`
-}
-
-type DeploymentSource struct {
-	Root       string `yaml:"root"`
-	Entrypoint string `yaml:"entrypoint,omitempty"`
+type DeploymentReference struct {
+	Adapter  string         `yaml:"adapter"`
+	Source   string         `yaml:"source"`
+	Resource string         `yaml:"resource"`
+	With     map[string]any `yaml:"with,omitempty"`
 }
 
 type Provider struct {
@@ -83,6 +91,11 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("decode %s: %w", path, err)
 	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve config path: %w", err)
+	}
+	configuration.BaseDir = filepath.Dir(absolutePath)
 	if len(configuration.PolicyFiles) == 0 && len(configuration.Policies) == 0 {
 		if err := loadBuiltInPolicies(&configuration); err != nil {
 			return Config{}, fmt.Errorf("load built-in policies: %w", err)
@@ -165,8 +178,8 @@ func decodePolicyDocument(reader io.Reader) (PolicyDocument, error) {
 	if err := requireYAMLEOF(decoder, "policy file"); err != nil {
 		return PolicyDocument{}, err
 	}
-	if document.Version != model.SchemaVersion {
-		return PolicyDocument{}, fmt.Errorf("version must be %d", model.SchemaVersion)
+	if document.Version != model.PolicySchemaVersion {
+		return PolicyDocument{}, fmt.Errorf("version must be %d", model.PolicySchemaVersion)
 	}
 	if len(document.Policies) == 0 {
 		return PolicyDocument{}, fmt.Errorf("policies must contain at least one policy")
@@ -201,28 +214,55 @@ func requireYAMLEOF(decoder *yaml.Decoder, documentName string) error {
 }
 
 func (c Config) Validate() error {
-	if c.Version != model.SchemaVersion {
-		return fmt.Errorf("version must be %d", model.SchemaVersion)
+	if c.Version != model.ConfigurationSchemaVersion {
+		return fmt.Errorf("version must be %d", model.ConfigurationSchemaVersion)
 	}
-	if len(c.Deployment.Units) == 0 {
-		return fmt.Errorf("deployment.units must contain at least one unit")
+	if strings.TrimSpace(c.Service) == "" {
+		return fmt.Errorf("service cannot be empty")
 	}
-	for name, unit := range c.Deployment.Units {
+	if len(c.Artifacts) == 0 {
+		return fmt.Errorf("artifacts must contain at least one artifact")
+	}
+	for name, artifact := range c.Artifacts {
 		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("deployment unit name cannot be empty")
+			return fmt.Errorf("artifact name cannot be empty")
 		}
-		root := unit.Source.Root
-		cleanedRoot := path.Clean(strings.ReplaceAll(root, "\\", "/"))
-		if strings.TrimSpace(root) == "" || strings.HasPrefix(cleanedRoot, "/") || cleanedRoot == ".." || strings.HasPrefix(cleanedRoot, "../") {
-			return fmt.Errorf("deployment unit %q source.root %q must be root-relative", name, root)
+		source := artifact.Source
+		if source == "" {
+			source = "."
 		}
-		entrypoint := unit.Source.Entrypoint
-		if entrypoint == "" {
-			continue
+		cleanedSource := path.Clean(strings.ReplaceAll(source, "\\", "/"))
+		if strings.TrimSpace(source) == "" || strings.HasPrefix(cleanedSource, "/") {
+			return fmt.Errorf("artifact %q source %q must be relative to waldo.yaml", name, artifact.Source)
 		}
+		entrypoint := artifact.Entrypoint
 		cleanedEntrypoint := path.Clean(strings.ReplaceAll(entrypoint, "\\", "/"))
 		if strings.TrimSpace(entrypoint) == "" || cleanedEntrypoint == "." || strings.HasPrefix(cleanedEntrypoint, "/") || cleanedEntrypoint == ".." || strings.HasPrefix(cleanedEntrypoint, "../") {
-			return fmt.Errorf("deployment unit %q source.entrypoint %q must be relative to source.root", name, entrypoint)
+			return fmt.Errorf("artifact %q entrypoint %q must be relative to its source", name, entrypoint)
+		}
+	}
+	if len(c.Deployments) == 0 {
+		return fmt.Errorf("deployments must contain at least one deployment")
+	}
+	for name, deployment := range c.Deployments {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("deployment name cannot be empty")
+		}
+		if _, exists := c.Artifacts[deployment.Artifact]; !exists {
+			return fmt.Errorf("deployment %q references unknown artifact %q", name, deployment.Artifact)
+		}
+		if strings.TrimSpace(deployment.From.Adapter) == "" {
+			return fmt.Errorf("deployment %q from.adapter cannot be empty", name)
+		}
+		if strings.TrimSpace(deployment.From.Source) == "" {
+			return fmt.Errorf("deployment %q from.source cannot be empty", name)
+		}
+		cleanedSource := path.Clean(strings.ReplaceAll(deployment.From.Source, "\\", "/"))
+		if strings.HasPrefix(cleanedSource, "/") {
+			return fmt.Errorf("deployment %q from.source %q must be relative to waldo.yaml", name, deployment.From.Source)
+		}
+		if strings.TrimSpace(deployment.From.Resource) == "" {
+			return fmt.Errorf("deployment %q from.resource cannot be empty", name)
 		}
 	}
 
@@ -271,7 +311,10 @@ func (c Config) Validate() error {
 		if disposition.Finding == "" {
 			return fmt.Errorf("disposition finding cannot be empty")
 		}
-		const prefix = "waldo:v1:"
+		prefix := "waldo:v2:"
+		if strings.HasPrefix(disposition.Finding, "waldo:v1:") {
+			prefix = "waldo:v1:"
+		}
 		digest := strings.TrimPrefix(disposition.Finding, prefix)
 		_, digestError := hex.DecodeString(digest)
 		if !strings.HasPrefix(disposition.Finding, prefix) || len(digest) != sha256HexLength || digestError != nil {

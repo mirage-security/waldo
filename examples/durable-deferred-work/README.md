@@ -20,8 +20,10 @@ go run ./cmd/waldo check \
   --config examples/durable-deferred-work/function.waldo.yaml
 ```
 
-Both commands report exactly one unresolved `durable-deferred-execution` error and therefore exit `1`. The models
-differ in their platform execution model and scale, but normalize the architectural properties relevant to the rule:
-the process is restartable and process-local scheduling is non-durable. Both files reference the same policy document
+Both commands report exactly one unresolved `durable-deferred-execution` error and therefore exit `1`. Each model
+binds the same artifact and deployment identity to different evidence through the `facts` adapter. The evidence
+differs in platform execution model and scale but normalizes the properties relevant to the rule: the process is
+restartable and process-local scheduling is non-durable. Both files reference the same policy document
 at [`../../policies/durable-deferred-execution.yaml`](../../policies/durable-deferred-execution.yaml); the rule is not
-copied or specialized per platform.
+copied or specialized per platform. The `facts` adapter is used here as an executable proof fixture; normal consumers
+bind artifacts to their existing Terraform, Kubernetes, or other deployment definitions.

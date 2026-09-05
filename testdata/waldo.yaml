@@ -1,17 +1,16 @@
-version: 1
+version: 2
+service: fixture
 
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-        entrypoint: checkout/expiry.example
-      facts:
-        process.restartable: true
-        process.replicas: 3
-        process.instances.concurrent: 3
-        memory.scope: instance
-        scheduling.processLocal.durable: false
-        memory.processLocal.authoritative: false
+artifacts:
+  worker:
+    entrypoint: src/checkout/expiry.example
+
+deployments:
+  worker:
+    artifact: worker
+    from:
+      adapter: facts
+      source: deployment/worker.yaml
+      resource: worker
 
 dispositions: []

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mirage-security/waldo/internal/config"
+	"github.com/mirage-security/waldo/internal/deployment"
 	"github.com/mirage-security/waldo/internal/model"
 	"github.com/mirage-security/waldo/internal/policy"
 	"github.com/mirage-security/waldo/internal/provider"
@@ -34,6 +35,13 @@ func TestOneInvariantAcrossTwoDeploymentModels(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load %s: %v", modelPath, err)
 		}
+		adapterRuns, err := deployment.Resolve(context.Background(), root, &configuration)
+		if err != nil {
+			t.Fatalf("resolve %s: %v", modelPath, err)
+		}
+		if len(adapterRuns) != 1 || adapterRuns[0].Facts == 0 {
+			t.Fatalf("%s did not resolve deployment evidence: %#v", modelPath, adapterRuns)
+		}
 		if len(configuration.Policies) != 1 {
 			t.Fatalf("%s loaded %d policies, want 1", modelPath, len(configuration.Policies))
 		}
@@ -46,8 +54,8 @@ func TestOneInvariantAcrossTwoDeploymentModels(t *testing.T) {
 			t.Fatalf("deployment models reference different policy files: %#v and %#v", firstPolicyFiles, configuration.PolicyFiles)
 		}
 
-		unit := configuration.Deployment.Units["expiry-notifier"]
-		executionModels = append(executionModels, unit.Facts["platform.executionModel"])
+		configuredDeployment := configuration.Deployments["expiry-notifier"]
+		executionModels = append(executionModels, configuredDeployment.Facts["platform.executionModel"])
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		facts, err := provider.Collect(ctx, root, configuration.Providers)
 		cancel()
@@ -112,6 +120,9 @@ func TestProcessLocalCoordinationSourceProof(t *testing.T) {
 		t.Run(filepath.Base(testCase.path), func(t *testing.T) {
 			configuration, err := config.Load(filepath.Join(root, testCase.path))
 			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := deployment.Resolve(context.Background(), root, &configuration); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

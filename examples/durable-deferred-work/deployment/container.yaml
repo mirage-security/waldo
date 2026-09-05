@@ -1,0 +1,9 @@
+version: 1
+resources:
+  expiry-notifier:
+    facts:
+      platform.executionModel: orchestrated-container
+      process.restartable: true
+      deployment.replicas.concurrent: true
+      deployment.replicas.maxConcurrent: 3
+      scheduling.processLocal.durable: false

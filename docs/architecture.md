@@ -1,88 +1,111 @@
 # Architecture
 
-Waldo owns orchestration and evaluation, not source-language analysis.
+Waldo owns orchestration and evaluation, not source-language analysis or deployment-language interpretation.
 
 ```text
-waldo.yaml deployment units ─┐
-provider JSONL code facts ───┼─ generic policy join ─ dispositions ─ findings/report/exit
-built-in or explicit policies ───┘
+existing deployment evidence -> deployment adapters -> deployment facts --\
+                                                                       policy join -> dispositions -> findings
+source code -----------------> code providers -------> code facts ------/
 ```
+
+## Consumer model
+
+A `waldo.yaml` describes one logical service. Artifacts identify executable source graphs; deployments bind those
+artifacts to resources in existing deployment evidence.
+
+```yaml
+version: 2
+service: reporting
+artifacts:
+  server:
+    entrypoint: src/index.ts
+deployments:
+  production:
+    artifact: server
+    from:
+      adapter: terraform
+      source: infra
+      resource: module.service
+      with:
+        varFiles: [production.tfvars]
+```
+
+The vocabulary is deliberately small:
+
+- a service is the logical software ownership boundary represented by the model;
+- an artifact is something built from one source graph and entrypoint;
+- a deployment is one placement or configuration of that artifact; and
+- `from` identifies the adapter, source evidence, and selected resource that establish its topology.
+
+The directory containing `waldo.yaml` is an artifact's default source. Multiple artifacts may share a source while
+using different entrypoints, and one artifact may be bound to several independently deployed resources.
 
 ## Boundaries
 
-- The deployment model contains objective properties of deployed units and a source description for each unit.
-- Providers contain source, language, runtime, framework, and dataflow knowledge. A cheap structural provider is a
-  valid choice when a rule does not need heavyweight analysis.
-- Policies match typed code facts and deployment facts. Rule IDs and their severities are configuration data.
-- Dispositions annotate one stable finding. They do not modify deployment facts, provider facts, severity, or global
-  rule behavior.
-- Reports retain every finding. CI policy fails only unresolved errors.
+- Deployment adapters own Terraform, Kubernetes, Wrangler, platform, and repository-specific deployment semantics.
+  They emit objective facts and never evaluate source policy.
+- Code providers own source syntax, runtime semantics, framework behavior, package discovery, and dataflow.
+- Policies match normalized code facts and deployment facts. Rule IDs and severity remain data.
+- Dispositions annotate one stable finding. They do not modify facts, severity, or global behavior.
+- Reports retain every finding. CI fails only unresolved errors.
 
-The same `source.root` may produce more than one deployment unit. An optional `source.entrypoint`, relative to that
-root, records which executable each unit starts. This supports an HTTP service and several workers built from one
-project without pretending they share deployment facts.
+Core launches deployment adapters and code providers through separate versioned process contracts. A custom adapter
+may understand repository conventions such as `deploy.json` without introducing that format into Waldo. A custom code
+provider may understand house abstractions without making policies application-specific.
 
-Protocol v1 providers do not yet report entrypoint reachability. Until a source-backed provider adds that evidence,
-Waldo conservatively associates a fact under a shared root with every unit using that root and evaluates a separate
-finding for each unit. The entrypoint is therefore part of the public deployment model but not yet a claim that Waldo
-can prove a fact is reachable from only one of several same-root executables. Scan scope and deployment ownership are
-separate concerns; narrowing `source.root` to avoid analyzer errors would falsify the topology.
+Deployment adapters inspect existing artifacts but never create them implicitly. In particular, the Terraform adapter
+does not run Terraform, initialize providers, read state, or contact a backend. Unresolved properties remain absent;
+policy evaluation never treats an unknown fact as established.
 
-The installed binary embeds Waldo's stable policy documents and loads them when a model declares no policy set.
-Likewise, the command selects packaged providers and deduplicates source targets from deployment `source.root` values
-when a model declares no providers. This makes topology the normal consumer configuration while preserving the
-process boundary: the core command launches provider executables through protocol v1 and does not import their source
-analyzers.
+## Source association
 
-Explicit policy documents and providers remain advanced full overrides. Policy paths are resolved relative to the
-model file, allowing focused proofs and custom integrations to vary independently from the built-in catalog.
+Protocol v1 code providers do not report entrypoint reachability. Waldo invokes built-in providers once per distinct
+artifact source and conservatively associates a fact with every deployment whose artifact source contains its path.
+The entrypoint records separate executables but does not yet prove that a fact is reachable from only one of several
+same-source artifacts.
+
+Scan scope and deployment ownership are separate concerns. Narrowing an artifact source merely to avoid analyzer
+output would falsify the source-to-deployment relationship. Precise reachability belongs in a future provider-backed,
+analyzer-neutral protocol extension.
+
+## Built-in policy and provider selection
+
+The installed binary embeds Waldo's stable policy catalog and loads it when a model declares no policy override. The
+command similarly selects packaged code providers and deduplicates artifact source targets when no providers are
+configured.
+
+Explicit policy documents and code providers remain advanced full overrides. Policy paths resolve relative to the
+model file. Deployment adapters are selected per deployment binding; names resolve to packaged adapter executables,
+while paths allow repository-specific implementations.
 
 ## Initial semantic policies
 
 The built-in catalog records four reusable policies across two source-backed invariant families:
 
-1. Correctness-critical deferred work must use durable execution authority when its process is restartable. A timer is
-   only one possible analyzer-observed manifestation; the invariant is not tied to a timer API or language.
-2. Deferred work whose criticality is not established receives a warning when its process-local scheduling authority
-   is non-durable and the execution instance can restart. The warning states the loss mode without claiming the work
-   is required.
-3. Deployment-scoped cross-request coordination cannot use process-local authority when multiple independently
-   executing instances have instance-scoped memory. Error severity requires a high-confidence provider fact.
-4. A decision that may treat process-local state as authoritative in a multi-replica deployment deserves warning-level
-   review. Providers with stronger provenance or dataflow can produce better facts. More specific locking,
-   deduplication, or coordination policies may justifiably be errors.
+1. Correctness-critical deferred work must use durable execution authority when its process can be replaced.
+2. Deferred work whose criticality is unknown receives a warning when process-local scheduling can be lost.
+3. Deployment-scoped coordination cannot use process-local authority when independently executing instances have
+   instance-scoped memory. Error severity requires a high-confidence code fact.
+4. A decision that may treat process-local state as authoritative in a multi-instance deployment deserves
+   warning-level review.
 
-These policies deliberately do not imply that all deferred work is correctness-critical or all local caches are
-architectural failures. The two deferred-execution policies are mutually exclusive for the current providers:
-established critical work produces the error, while unknown criticality produces the warning.
-
-The executable foundation proofs use a Go-specific provider and a separate Semgrep adapter. The adapter translates
-only analyzer rules with explicit Waldo metadata and leaves parsing, discovery, syntax, and concrete APIs in Semgrep.
-The JavaScript provider packages generic language rules behind its provider command and currently delegates to that
-adapter internally. Consumers do not configure Semgrep for built-in language facts. Core imports none of these
-providers, and another analyzer can replace a backend while emitting the same fact shape.
+These policies do not imply that every timer, cache, or local state value is wrong. Deployment adapters normalize
+platform behavior; policies name only the resulting architectural properties.
 
 ## Stable identities
 
-Finding IDs are SHA-256 identities over a version tag, policy ID, deployment unit, provider name, and provider-owned
-fact ID. Providers must keep a fact ID stable across source movement while changing it when the semantic subject
-changes. This supports narrow review decisions without relying on broad symbol allowances.
+Finding IDs are SHA-256 identities over a version tag, policy ID, `service/deployment` identity, provider name, and
+provider-owned fact ID. Locations are evidence rather than identity. A provider must keep its fact ID stable across
+source movement while changing it when the semantic subject changes.
 
-## Change comparison
+## Change comparison and auditable zero results
 
-`waldo compare` compares base and head reports by stable identity. It separates introduced, resolved, changed, and
-unchanged findings, allowing a proposed change to be evaluated independently from existing debt. A new unresolved
+`waldo compare` separates introduced, resolved, changed, and unchanged findings by stable identity. A new unresolved
 error fails comparison; an unchanged unresolved error does not.
 
-## Auditable zero results
+Report schema v3 records successful deployment-adapter runs, provider runs, normalized fact counts, deployments, and
+loaded policies. A failed adapter or provider prevents report creation and exits `2`. A successful zero-fact adapter
+is visible but does not prove full topology coverage.
 
-Report schema v2 records successful provider runs and their normalized fact counts alongside the number of deployment
-units and loaded policies. A provider failure still prevents report creation and exits `2`. Comparison output carries
-both reports' accounting, making an unexpected change from “provider emitted facts” to “provider emitted zero facts”
-visible even when neither report contains a finding.
-
-This accounting does not prove source coverage. Provider protocol v1 contains semantic facts, not analyzer telemetry
-about discovered files, parsed files, or skipped paths. Zero-result experiments therefore require a known-positive
-control through the same provider and deployment model, followed by counterfactual runs that independently remove the
-matching code and deployment premises. Richer source-coverage telemetry should only extend the public protocol when a
-real provider demonstrates a portable contract for it.
+Zero-result experiments require a known-positive control through the same adapters, providers, and policies, followed
+by counterfactual runs that independently remove the code and deployment premises.

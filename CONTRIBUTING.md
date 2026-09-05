@@ -80,8 +80,7 @@ policies:
     severity: error
     when:
       deployment:
-        process.instances.concurrent:
-          greaterThan: 1
+        deployment.replicas.concurrent: true
         memory.scope: instance
       code:
         kind: exclusion
@@ -108,7 +107,7 @@ It must also include:
 
 - a semantic explanation of the invariant;
 - provider or provider-fixture evidence for the code fact;
-- at least one realistic `waldo.yaml` deployment model;
+- at least one realistic `waldo.yaml` artifact-to-deployment binding and its adapter evidence;
 - an explicit severity rationale;
 - positive, negative, accepted-disposition, and known-noise scenarios where applicable;
 - stable provider fact identities that do not depend on line numbers; and
@@ -135,8 +134,9 @@ or severity.
 
 - Providers own syntax, runtime semantics, framework behavior, and dataflow. They may recognize specific APIs, but
   should emit normalized facts for policy evaluation.
-- Deployment models own objective runtime properties such as restartability, concurrency, memory scope, durability,
-  and consistency guarantees.
+- Deployment adapters own the translation from existing deployment evidence to objective runtime properties such as
+  restartability, concurrency, memory scope, durability, and consistency guarantees. `waldo.yaml` binds artifacts to
+  that evidence; it does not duplicate those properties.
 - Policies own only the cross-boundary invariant.
 - Integrations may attach technology-specific remediation, but core finding messages remain product-neutral.
 

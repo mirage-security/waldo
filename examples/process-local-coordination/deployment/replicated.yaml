@@ -1,0 +1,7 @@
+version: 1
+resources:
+  call-gateway:
+    facts:
+      platform.executionModel: orchestrated-container
+      deployment.replicas.concurrent: true
+      memory.scope: instance

@@ -1,12 +1,13 @@
 package policy
 
 import (
+	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/mirage-security/waldo/internal/config"
+	"github.com/mirage-security/waldo/internal/deployment"
 	"github.com/mirage-security/waldo/internal/model"
 	"github.com/mirage-security/waldo/internal/provider"
 	"gopkg.in/yaml.v3"
@@ -37,6 +38,9 @@ func TestSemanticScenarios(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if _, err := deployment.Resolve(context.Background(), repositoryRoot, &configuration); err != nil {
+				t.Fatal(err)
+			}
 			directory := filepath.Join(scenariosRoot, entry.Name())
 			facts, err := provider.LoadFacts(filepath.Join(directory, "facts.jsonl"), repositoryRoot)
 			if err != nil {
@@ -55,7 +59,7 @@ func TestSemanticScenarios(t *testing.T) {
 					t.Fatal("disposition scenario must contain exactly one fact")
 				}
 				configuration.Dispositions = append(configuration.Dispositions, config.FindingDisposition{
-					Finding:     FindingID(expected.PolicyID, "worker", facts[0].Provider, facts[0].ID),
+					Finding:     FindingID(expected.PolicyID, "fixture/worker", facts[0].Provider, facts[0].ID),
 					Disposition: expected.Disposition,
 					Reason:      expected.Reason,
 				})
@@ -95,20 +99,22 @@ func TestFindingIDDoesNotDependOnLocation(t *testing.T) {
 	}
 }
 
-func TestMatchingUnitsConservativelyIncludesSameRootEntrypoints(t *testing.T) {
-	units := map[string]config.DeploymentUnit{
-		"api-http": {
-			Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/http.ts"},
+func TestMatchingDeploymentsConservativelyIncludesSameArtifactEntrypoints(t *testing.T) {
+	configuration := config.Config{
+		Service: "api",
+		Artifacts: map[string]config.Artifact{
+			"server":    {ResolvedSource: "services/api", Entrypoint: "src/http.ts"},
+			"worker":    {ResolvedSource: "services/api", Entrypoint: "src/worker.ts"},
+			"reporting": {ResolvedSource: "services/reporting", Entrypoint: "src/http.ts"},
 		},
-		"api-worker": {
-			Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/worker.ts"},
-		},
-		"reporting-http": {
-			Source: config.DeploymentSource{Root: "services/reporting", Entrypoint: "src/http.ts"},
+		Deployments: map[string]config.Deployment{
+			"api-http":       {Artifact: "server"},
+			"api-worker":     {Artifact: "worker"},
+			"reporting-http": {Artifact: "reporting"},
 		},
 	}
 
-	matches := matchingUnits(units, "services/api/src/shared/state.ts")
+	matches := matchingDeployments(configuration, "services/api/src/shared/state.ts")
 	if len(matches) != 2 || matches[0] != "api-http" || matches[1] != "api-worker" {
 		t.Fatalf("unexpected conservative source matches: %#v", matches)
 	}
@@ -119,9 +125,12 @@ func TestDuplicateProviderIdentityFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := deployment.Resolve(context.Background(), filepath.Join("..", ".."), &configuration); err != nil {
+		t.Fatal(err)
+	}
 	fact := model.CodeFact{
 		ID: "deferred:duplicate", Provider: "fixture", Kind: "deferred-execution",
-		Source:     model.SourceLocation{Path: "src/work.example"},
+		Source:     model.SourceLocation{Path: "testdata/src/work.example"},
 		Attributes: map[string]any{"correctness.critical": true, "execution.authority": "process-local"},
 	}
 	if _, err := Evaluate(configuration, []model.CodeFact{fact, fact}); err == nil {
@@ -148,8 +157,8 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 		Severity: model.SeverityError,
 		When: config.Conditions{
 			Deployment: map[string]any{
-				"process.instances.concurrent": map[string]any{"greaterThan": 1},
-				"memory.scope":                 "instance",
+				"deployment.replicas.concurrent": true,
+				"memory.scope":                   "instance",
 			},
 			Code: config.CodeConditions{Kind: "coordination", Attributes: map[string]any{
 				"coordination.authority":     "process-local",
@@ -164,28 +173,32 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 	tests := []struct {
 		name        string
 		facts       []model.CodeFact
-		concurrency int
+		concurrent  bool
 		memoryScope string
 		want        int
 	}{
-		{name: "both match", facts: []model.CodeFact{fact}, concurrency: 3, memoryScope: "instance", want: 1},
-		{name: "code missing", concurrency: 3, memoryScope: "instance", want: 0},
-		{name: "single instance", facts: []model.CodeFact{fact}, concurrency: 1, memoryScope: "instance", want: 0},
-		{name: "shared memory", facts: []model.CodeFact{fact}, concurrency: 3, memoryScope: "deployment", want: 0},
+		{name: "both match", facts: []model.CodeFact{fact}, concurrent: true, memoryScope: "instance", want: 1},
+		{name: "code missing", concurrent: true, memoryScope: "instance", want: 0},
+		{name: "single replica", facts: []model.CodeFact{fact}, concurrent: false, memoryScope: "instance", want: 0},
+		{name: "shared memory", facts: []model.CodeFact{fact}, concurrent: true, memoryScope: "deployment", want: 0},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			configuration := config.Config{
+				Service:  "fixture",
 				Policies: []config.Policy{rule},
-				Deployment: config.Deployment{Units: map[string]config.DeploymentUnit{
+				Artifacts: map[string]config.Artifact{
+					"worker": {ResolvedSource: "src", Entrypoint: "worker.ts"},
+				},
+				Deployments: map[string]config.Deployment{
 					"worker": {
-						Source: config.DeploymentSource{Root: "src", Entrypoint: "worker.ts"},
+						Artifact: "worker",
 						Facts: map[string]any{
-							"process.instances.concurrent": test.concurrency,
-							"memory.scope":                 test.memoryScope,
+							"deployment.replicas.concurrent": test.concurrent,
+							"memory.scope":                   test.memoryScope,
 						},
 					},
-				}},
+				},
 			}
 			findings, err := Evaluate(configuration, test.facts)
 			if err != nil {
@@ -199,18 +212,7 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 }
 
 func TestNonDurableDeferredExecutionRequiresBothBoundaries(t *testing.T) {
-	configuration, err := config.Decode(strings.NewReader(`
-version: 1
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-        entrypoint: expiry.example
-      facts:
-        process.restartable: true
-        scheduling.processLocal.durable: false
-`))
+	configuration, err := config.Load(filepath.Join("..", "..", "testdata", "waldo.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +220,7 @@ deployment:
 		ID:       "deferred:expiry",
 		Provider: "fixture",
 		Kind:     "deferred-execution",
-		Source:   model.SourceLocation{Path: "src/expiry.example"},
+		Source:   model.SourceLocation{Path: "testdata/src/expiry.example"},
 		Attributes: map[string]any{
 			"correctness.criticality": "unknown",
 			"execution.authority":     "process-local",
@@ -258,10 +260,10 @@ deployment:
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			configuration.Deployment.Units["worker"] = config.DeploymentUnit{
-				Source: config.DeploymentSource{Root: "src", Entrypoint: "expiry.example"},
-				Facts:  test.facts,
-			}
+			configuration.Artifacts["worker"] = config.Artifact{ResolvedSource: "testdata", Entrypoint: "src/expiry.example"}
+			configuredDeployment := configuration.Deployments["worker"]
+			configuredDeployment.Facts = test.facts
+			configuration.Deployments["worker"] = configuredDeployment
 			var facts []model.CodeFact
 			if test.fact != nil {
 				facts = []model.CodeFact{*test.fact}

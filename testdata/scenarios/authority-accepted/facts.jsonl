@@ -1,1 +1,1 @@
-{"id":"authority:best-effort-routing","provider":"fixture","kind":"state-dependent-decision","source":{"path":"src/routing/choose.example","line":33},"symbol":"chooseRoute","attributes":{"state.scope":"process-local","decision.authoritative":true,"provenance.confidence":"bounded"}}
+{"id":"authority:best-effort-routing","provider":"fixture","kind":"state-dependent-decision","source":{"path":"testdata/src/routing/choose.example","line":33},"symbol":"chooseRoute","attributes":{"state.scope":"process-local","decision.authoritative":true,"provenance.confidence":"bounded"}}
