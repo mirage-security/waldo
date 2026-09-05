@@ -46,6 +46,9 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 					CodeFact:          fact,
 					Message:           rule.Message,
 				}
+				if recommendation, ok := configuration.Recommendations[rule.ID]; ok {
+					finding.Recommendation = &recommendation
+				}
 				if disposition, ok := dispositions[finding.ID]; ok {
 					finding.Disposition = disposition.Disposition
 					finding.DispositionReason = disposition.Reason

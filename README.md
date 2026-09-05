@@ -1,16 +1,17 @@
 # Waldo
 
-Waldo catches code whose architectural guarantees do not hold when that code is deployed.
+Waldo gives coding agents deterministic feedback about how code changes behave in production.
 
 ```text
-deployment facts + code facts + architectural policy + human disposition -> findings
+deployment facts + code facts + architectural policy -> finding + consumer recommendation
 ```
 
 ## Why use Waldo?
 
 A source tool can find a local timer or lock. It usually does not know whether the process can be replaced or how many
 copies may run. An infrastructure tool knows how the code is deployed, but not whether the timer schedules required
-work or the lock protects shared state. Waldo checks both.
+work or the lock protects shared state. Waldo checks both, then returns a stable finding with concrete steering chosen
+by the team that owns the service.
 
 Waldo's scope is narrow. A core policy must require both a code fact and a deployment fact. A check that needs only one
 belongs in a source or infrastructure tool.
@@ -63,6 +64,11 @@ deployments:
       with:
         varFiles:
           - production.tfvars
+
+recommendations:
+  durable-deferred-execution:
+    instruction: Move required delayed work to a BullMQ queue backed by persistent Redis.
+    reference: docs/engineering/bullmq.md
 ```
 
 Then run from the repository root:
@@ -91,6 +97,20 @@ providers, read state, contact backends, or access cloud APIs.
 Waldo loads its built-in policies and source providers automatically. Explicit policies and providers are advanced
 full overrides for focused proofs and custom integrations.
 
+## Deterministic agent steering
+
+Recommendations turn a portable architectural finding into a concrete change for one codebase. They live in the same
+`waldo.yaml` as the artifact and deployment bindings, keyed by policy ID. `instruction` is required; `reference` is an
+optional repository path or URL that an agent can consult.
+
+The example above tells an agent to use BullMQ because that is this service's chosen implementation. Another consumer
+can attach a different implementation to the same `durable-deferred-execution` invariant without forking Waldo's
+policy. Unknown policy IDs fail configuration validation, so stale steering cannot silently stop applying.
+
+Recommendations are output only after the code and deployment facts match. They do not affect evidence, severity,
+disposition, or stable finding identity. They appear inline in both human and JSON reports, producing a deterministic
+edit-check loop: change code, run Waldo, follow the configured recommendation, and rerun Waldo.
+
 ## Findings and CI
 
 Severity and disposition are independent:
@@ -111,8 +131,8 @@ comparison. Reports record completed deployment adapters, source-provider covera
 making an unexpected zero-result scan inspectable. Partial provider coverage exits `2` unless the research-oriented
 `--allow-partial` flag is explicit.
 
-Human and JSON findings include the selected deployment plus the exact code and deployment facts that satisfied the
-policy, so the cross-boundary reason for a finding remains inspectable.
+Human and JSON findings include the selected deployment, the exact code and deployment facts that satisfied the
+policy, and any consumer recommendation, so both the reason and the intended next step remain inspectable.
 
 ## Adapters and providers
 

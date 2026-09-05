@@ -41,6 +41,12 @@ func TestCheckJSONAndExitPolicy(t *testing.T) {
 	if report.Findings[0].MatchedCode["correctness.critical"] != true || report.Findings[0].MatchedDeployment["process.restartable"] != true {
 		t.Fatalf("report does not preserve both sides of the policy join: %#v", report.Findings[0])
 	}
+	if report.Findings[0].Recommendation == nil || report.Findings[0].Recommendation.Instruction != "Move required delayed work to a BullMQ queue backed by persistent Redis." {
+		t.Fatalf("report does not include consumer steering: %#v", report.Findings[0])
+	}
+	if report.Findings[0].Recommendation.Reference != "docs/engineering/bullmq.md" {
+		t.Fatalf("report does not include the consumer reference: %#v", report.Findings[0].Recommendation)
+	}
 }
 
 func TestCheckHumanReportExplainsPolicyJoin(t *testing.T) {
@@ -63,6 +69,8 @@ func TestCheckHumanReportExplainsPolicyJoin(t *testing.T) {
 		"deployment evidence (fixture/worker)",
 		"process.restartable=true",
 		"scheduling.processLocal.durable=false",
+		"recommendation: Move required delayed work to a BullMQ queue backed by persistent Redis.",
+		"reference: docs/engineering/bullmq.md",
 	} {
 		if !strings.Contains(report, expected) {
 			t.Fatalf("human report is missing %q:\n%s", expected, report)

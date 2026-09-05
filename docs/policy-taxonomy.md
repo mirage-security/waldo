@@ -3,6 +3,10 @@
 Waldo keeps its core taxonomy deliberately small. Categories describe architectural dimensions, not analyzer engines,
 programming languages, or infrastructure products.
 
+Consumer recommendations are deliberately outside this taxonomy. A policy states the portable architectural
+consequence; `waldo.yaml` may attach a concrete technology choice to that policy ID for deterministic agent steering.
+Changing that recommendation does not change the policy or finding identity.
+
 ## Durability
 
 | Policy | Status | Intended claim |

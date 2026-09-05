@@ -370,3 +370,48 @@ func TestNonDurableDeferredExecutionRequiresBothBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestRecommendationDoesNotChangeFindingIdentity(t *testing.T) {
+	configuration, err := config.Load(filepath.Join("..", "..", "testdata", "waldo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration.Artifacts["worker"] = config.Artifact{ResolvedSource: "testdata", Entrypoint: "src/expiry.example"}
+	configuredDeployment := configuration.Deployments["worker"]
+	configuredDeployment.Facts = map[string]any{
+		"process.restartable":             true,
+		"scheduling.processLocal.durable": false,
+	}
+	configuration.Deployments["worker"] = configuredDeployment
+	facts := []model.CodeFact{{
+		ID:       "deferred:expiry",
+		Provider: "fixture",
+		Kind:     "deferred-execution",
+		Source:   model.SourceLocation{Path: "testdata/src/expiry.example"},
+		Attributes: map[string]any{
+			"correctness.critical": true,
+			"execution.authority":  "process-local",
+		},
+	}}
+
+	withRecommendation, err := Evaluate(configuration, facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(configuration.Recommendations, "durable-deferred-execution")
+	withoutRecommendation, err := Evaluate(configuration, facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withRecommendation) != 1 || withRecommendation[0].Recommendation == nil {
+		t.Fatalf("expected one recommended finding: %#v", withRecommendation)
+	}
+	if len(withoutRecommendation) != 1 || withoutRecommendation[0].Recommendation != nil {
+		t.Fatalf("expected one finding without a recommendation: %#v", withoutRecommendation)
+	}
+	if withRecommendation[0].ID != withoutRecommendation[0].ID ||
+		withRecommendation[0].Severity != withoutRecommendation[0].Severity ||
+		withRecommendation[0].Disposition != withoutRecommendation[0].Disposition {
+		t.Fatalf("recommendation changed invariant state: %#v %#v", withRecommendation[0], withoutRecommendation[0])
+	}
+}

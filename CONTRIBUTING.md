@@ -20,7 +20,7 @@ A proposed core policy belongs in Waldo only when all of these are true:
 
 If the conclusion still follows without deployment context, it belongs in an analyzer. If it still follows without
 code context, it belongs in deployment validation. If it says to use a particular product, that recommendation belongs
-outside core policy.
+in the consumer's `waldo.yaml` or an external integration, not in core policy.
 
 Good invariant:
 
@@ -140,7 +140,8 @@ or severity.
   restartability, concurrency, memory scope, durability, and consistency guarantees. `waldo.yaml` binds artifacts to
   that evidence; it does not duplicate those properties.
 - Policies own only the cross-boundary invariant.
-- Integrations may attach technology-specific remediation, but core finding messages remain product-neutral.
+- Consumer recommendations in `waldo.yaml` and external integrations may attach technology-specific remediation, but
+  core finding messages remain product-neutral.
 
 See the [provider protocol](docs/provider-protocol.md), [architecture](docs/architecture.md), and
 [policy taxonomy](docs/policy-taxonomy.md) before proposing a new policy.

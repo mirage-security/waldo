@@ -81,5 +81,6 @@ func findingStateEqual(left, right model.Finding) bool {
 		left.DispositionReason == right.DispositionReason &&
 		reflect.DeepEqual(left.MatchedDeployment, right.MatchedDeployment) &&
 		reflect.DeepEqual(left.MatchedCode, right.MatchedCode) &&
-		reflect.DeepEqual(left.CodeFact.Attributes, right.CodeFact.Attributes)
+		reflect.DeepEqual(left.CodeFact.Attributes, right.CodeFact.Attributes) &&
+		reflect.DeepEqual(left.Recommendation, right.Recommendation)
 }
