@@ -6,19 +6,26 @@ Waldo catches code whose architectural guarantees do not hold when that code is 
 deployment facts + code facts + architectural policy + human disposition -> findings
 ```
 
-A local timer can disappear with its process. A process-local lock cannot coordinate independently running copies.
-Source linters see the APIs but not the topology; infrastructure checks see the topology but not what the code is
-trying to guarantee. Waldo evaluates the combination.
+## Why use Waldo?
 
-## Why Waldo?
+A source tool can find a local timer or lock. It usually does not know whether the process can be replaced or how many
+copies may run. An infrastructure tool knows how the code is deployed, but not whether the timer schedules required
+work or the lock protects shared state. Waldo checks both.
 
-Code can be correct in one execution model and wrong in another. Waldo's core rule for admitting a policy is therefore
-strict: its conclusion must require both a code fact and a deployment fact. Checks that do not need deployment context
-belong in ordinary analyzers instead.
+Waldo's scope is narrow. A core policy must require both a code fact and a deployment fact. A check that needs only one
+belongs in a source or infrastructure tool.
 
-The project grew from [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
-Its name refers to Waldo et al.'s [*A Note on Distributed Computing*](https://waldo.scholars.harvard.edu/publications/note-distributed-computing):
-local and distributed systems can share interfaces, but they cannot be assumed to share semantics.
+### Can't I check this another way?
+
+You can build this yourself: run source checks, read the deployment configuration, and join the results. Waldo provides
+that workflow, along with stable findings, accepted exceptions, and base/head comparison. It works alongside source
+linters, security scanners, and infrastructure checks.
+
+### The name
+
+Waldo is named after Waldo et al.'s
+[*A Note on Distributed Computing*](https://waldo.scholars.harvard.edu/publications/note-distributed-computing).
+It started with [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
 
 ## Quick start
 
