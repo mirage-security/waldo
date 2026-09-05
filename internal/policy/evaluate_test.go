@@ -95,6 +95,25 @@ func TestFindingIDDoesNotDependOnLocation(t *testing.T) {
 	}
 }
 
+func TestMatchingUnitsConservativelyIncludesSameRootEntrypoints(t *testing.T) {
+	units := map[string]config.DeploymentUnit{
+		"api-http": {
+			Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/http.ts"},
+		},
+		"api-worker": {
+			Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/worker.ts"},
+		},
+		"reporting-http": {
+			Source: config.DeploymentSource{Root: "services/reporting", Entrypoint: "src/http.ts"},
+		},
+	}
+
+	matches := matchingUnits(units, "services/api/src/shared/state.ts")
+	if len(matches) != 2 || matches[0] != "api-http" || matches[1] != "api-worker" {
+		t.Fatalf("unexpected conservative source matches: %#v", matches)
+	}
+}
+
 func TestDuplicateProviderIdentityFails(t *testing.T) {
 	configuration, err := config.Load(filepath.Join("..", "..", "testdata", "waldo.yaml"))
 	if err != nil {
@@ -160,7 +179,7 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 				Policies: []config.Policy{rule},
 				Deployment: config.Deployment{Units: map[string]config.DeploymentUnit{
 					"worker": {
-						CodeRoots: []string{"src"},
+						Source: config.DeploymentSource{Root: "src", Entrypoint: "worker.ts"},
 						Facts: map[string]any{
 							"process.instances.concurrent": test.concurrency,
 							"memory.scope":                 test.memoryScope,
@@ -185,7 +204,9 @@ version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
+        entrypoint: expiry.example
       facts:
         process.restartable: true
         scheduling.processLocal.durable: false
@@ -237,7 +258,10 @@ deployment:
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			configuration.Deployment.Units["worker"] = config.DeploymentUnit{CodeRoots: []string{"src"}, Facts: test.facts}
+			configuration.Deployment.Units["worker"] = config.DeploymentUnit{
+				Source: config.DeploymentSource{Root: "src", Entrypoint: "expiry.example"},
+				Facts:  test.facts,
+			}
 			var facts []model.CodeFact
 			if test.fact != nil {
 				facts = []model.CodeFact{*test.fact}

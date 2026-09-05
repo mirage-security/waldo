@@ -10,7 +10,7 @@ built-in or explicit policies ───┘
 
 ## Boundaries
 
-- The deployment model contains objective properties of deployed units and the source roots that compose them.
+- The deployment model contains objective properties of deployed units and a source description for each unit.
 - Providers contain source, language, runtime, framework, and dataflow knowledge. A cheap structural provider is a
   valid choice when a rule does not need heavyweight analysis.
 - Policies match typed code facts and deployment facts. Rule IDs and their severities are configuration data.
@@ -18,13 +18,21 @@ built-in or explicit policies ───┘
   rule behavior.
 - Reports retain every finding. CI policy fails only unresolved errors.
 
-The same source root may belong to more than one deployment unit. Waldo evaluates a separate finding for each unit
-because the architectural consequence may differ with deployment facts.
+The same `source.root` may produce more than one deployment unit. An optional `source.entrypoint`, relative to that
+root, records which executable each unit starts. This supports an HTTP service and several workers built from one
+project without pretending they share deployment facts.
+
+Protocol v1 providers do not yet report entrypoint reachability. Until a source-backed provider adds that evidence,
+Waldo conservatively associates a fact under a shared root with every unit using that root and evaluates a separate
+finding for each unit. The entrypoint is therefore part of the public deployment model but not yet a claim that Waldo
+can prove a fact is reachable from only one of several same-root executables. Scan scope and deployment ownership are
+separate concerns; narrowing `source.root` to avoid analyzer errors would falsify the topology.
 
 The installed binary embeds Waldo's stable policy documents and loads them when a model declares no policy set.
-Likewise, the command selects packaged providers and derives source targets from deployment `codeRoots` when a model
-declares no providers. This makes topology the normal consumer configuration while preserving the process boundary:
-the core command launches provider executables through protocol v1 and does not import their source analyzers.
+Likewise, the command selects packaged providers and deduplicates source targets from deployment `source.root` values
+when a model declares no providers. This makes topology the normal consumer configuration while preserving the
+process boundary: the core command launches provider executables through protocol v1 and does not import their source
+analyzers.
 
 Explicit policy documents and providers remain advanced full overrides. Policy paths are resolved relative to the
 model file, allowing focused proofs and custom integrations to vary independently from the built-in catalog.

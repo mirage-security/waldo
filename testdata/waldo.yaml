@@ -3,7 +3,9 @@ version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
+        entrypoint: checkout/expiry.example
       facts:
         process.restartable: true
         process.replicas: 3
