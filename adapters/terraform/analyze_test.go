@@ -41,6 +41,24 @@ resource "aws_ecs_service" "this" {
 	}
 }
 
+func TestAnalyzeRepositoryTerraformExample(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "examples", "terraform-ecs-service", "infra")
+	result, err := Analyze(protocol.DeploymentRequest{
+		Root: root, Source: source, Resource: "aws_ecs_service.worker",
+		Options: map[string]any{"varFiles": []any{"production.tfvars"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Facts["deployment.replicas.concurrent"] != true || result.Facts["deployment.replicas.maxConcurrent"] != 4 {
+		t.Fatalf("unexpected example facts: %#v", result.Facts)
+	}
+}
+
 func TestAnalyzeSingleECSResourceWithoutRolloutOverlap(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "main.tf"), `

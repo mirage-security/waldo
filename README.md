@@ -62,6 +62,9 @@ Then run from the repository root:
 waldo check --config services/reporting/waldo.yaml
 ```
 
+[`examples/terraform-ecs-service/`](examples/terraform-ecs-service/) contains an executable version of this pattern
+with standalone source, Terraform configuration, and a shared Waldo policy.
+
 This file does not repeat Terraform's topology. It binds the `server` artifact to the existing deployment resource:
 
 - `adapter` says how Waldo reads the deployment evidence;
@@ -96,7 +99,15 @@ counts, making an unexpected zero-result scan inspectable.
 
 ## Adapters and providers
 
-The same binding contract supports additional static deployment adapters. For example, a Kubernetes adapter can use:
+Terraform is the currently supported deployment format. The executable
+[`terraform-ecs-service`](examples/terraform-ecs-service/) example binds an artifact to a raw ECS resource. The
+adapter also recognizes the supported Terraform AWS module shapes documented in
+[`adapters/terraform/README.md`](adapters/terraform/README.md).
+
+### Future adapters
+
+The same binding contract is designed to support additional static deployment adapters. A future Kubernetes adapter
+could use:
 
 ```yaml
 from:
@@ -105,8 +116,8 @@ from:
   resource: Deployment/reporting
 ```
 
-Kubernetes support is not implemented yet; the example shows that adding it does not change the public binding
-vocabulary or core policies.
+Kubernetes support is not implemented yet. This shape only demonstrates that adding it would not change the public
+binding vocabulary or core policies; it is not an executable example.
 
 External adapters use the same binding shape:
 
