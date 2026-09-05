@@ -17,15 +17,16 @@ import (
 )
 
 type Config struct {
-	Version      int                   `yaml:"version"`
-	Service      string                `yaml:"service"`
-	Artifacts    map[string]Artifact   `yaml:"artifacts"`
-	Deployments  map[string]Deployment `yaml:"deployments"`
-	Providers    []Provider            `yaml:"providers,omitempty"`
-	PolicyFiles  []string              `yaml:"policyFiles,omitempty"`
-	Policies     []Policy              `yaml:"policies,omitempty"`
-	Dispositions []FindingDisposition  `yaml:"dispositions,omitempty"`
-	BaseDir      string                `yaml:"-"`
+	Version         int                             `yaml:"version"`
+	Service         string                          `yaml:"service"`
+	Artifacts       map[string]Artifact             `yaml:"artifacts"`
+	Deployments     map[string]Deployment           `yaml:"deployments"`
+	Providers       []Provider                      `yaml:"providers,omitempty"`
+	PolicyFiles     []string                        `yaml:"policyFiles,omitempty"`
+	Policies        []Policy                        `yaml:"policies,omitempty"`
+	Recommendations map[string]model.Recommendation `yaml:"recommendations,omitempty"`
+	Dispositions    []FindingDisposition            `yaml:"dispositions,omitempty"`
+	BaseDir         string                          `yaml:"-"`
 }
 
 type PolicyDocument struct {
@@ -308,6 +309,20 @@ func (c Config) Validate() error {
 		}
 		if policy.Message == "" {
 			return fmt.Errorf("policy %q must declare a message", policy.ID)
+		}
+	}
+	for policyID, recommendation := range c.Recommendations {
+		if strings.TrimSpace(policyID) == "" {
+			return fmt.Errorf("recommendation policy ID cannot be empty")
+		}
+		if _, exists := policyIDs[policyID]; !exists {
+			return fmt.Errorf("recommendation references unknown policy %q", policyID)
+		}
+		if strings.TrimSpace(recommendation.Instruction) == "" {
+			return fmt.Errorf("recommendation for policy %q must include an instruction", policyID)
+		}
+		if recommendation.Reference != "" && strings.TrimSpace(recommendation.Reference) == "" {
+			return fmt.Errorf("recommendation for policy %q reference cannot be blank", policyID)
 		}
 	}
 

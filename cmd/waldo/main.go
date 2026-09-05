@@ -227,8 +227,8 @@ func readReport(path string) (model.Report, error) {
 	if err := decoder.Decode(&report); err != nil {
 		return model.Report{}, err
 	}
-	if report.SchemaVersion != 1 && report.SchemaVersion != 2 && report.SchemaVersion != 3 && report.SchemaVersion != model.ReportSchemaVersion {
-		return model.Report{}, fmt.Errorf("schemaVersion must be 1, 2, 3, or %d", model.ReportSchemaVersion)
+	if report.SchemaVersion != 1 && report.SchemaVersion != 2 && report.SchemaVersion != 3 && report.SchemaVersion != 4 && report.SchemaVersion != model.ReportSchemaVersion {
+		return model.Report{}, fmt.Errorf("schemaVersion must be between 1 and %d", model.ReportSchemaVersion)
 	}
 	if err := ensureEOF(decoder); err != nil {
 		return model.Report{}, err
@@ -271,6 +271,12 @@ func writeHumanReport(writer io.Writer, report model.Report) {
 		}
 		fmt.Fprintf(writer, "): %s\n", formatEvidence(finding.MatchedCode))
 		fmt.Fprintf(writer, "  deployment evidence (%s): %s\n", finding.Deployment, formatEvidence(finding.MatchedDeployment))
+		if finding.Recommendation != nil {
+			fmt.Fprintf(writer, "  recommendation: %s\n", finding.Recommendation.Instruction)
+			if finding.Recommendation.Reference != "" {
+				fmt.Fprintf(writer, "  reference: %s\n", finding.Recommendation.Reference)
+			}
+		}
 		fmt.Fprintf(writer, "  finding: %s\n", finding.ID)
 		if finding.DispositionReason != "" {
 			fmt.Fprintf(writer, "  reason: %s\n", finding.DispositionReason)

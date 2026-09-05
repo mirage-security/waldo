@@ -48,11 +48,14 @@ state, or replica-divergence variants until a real example requires a distinct d
   providers by default; explicit policies and providers are advanced full overrides. Built-in providers own generic
   language-fact extraction and backend rule files. Do not require consumers to copy or author Semgrep configuration
   for built-in language semantics.
-- `waldo.yaml` owns service, artifact, and deployment bindings. Deployment adapters own objective deployment
-  properties. Neither may contain programming-language runtime semantics.
+- `waldo.yaml` owns service, artifact, and deployment bindings plus consumer recommendations keyed by policy ID.
+  Recommendations may name the consumer's selected technology but never participate in matching or alter facts,
+  severity, disposition, or finding identity. Deployment adapters own objective deployment properties. Neither
+  bindings nor deployment facts may contain programming-language runtime semantics.
 - `policies/` owns provider-neutral architectural invariants. Policy IDs, matches, messages, and severity are data,
   not hard-coded behavior in core.
-- Technology-specific remediation belongs in integrations, not core findings or policies.
+- Technology-specific remediation belongs in consumer recommendations or integrations, not core policy messages or
+  facts.
 - Human decisions change finding disposition only. They never mutate facts, severity, or global policy behavior.
 
 ## Rule admission test

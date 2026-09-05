@@ -101,7 +101,8 @@ For each corpus experiment:
 4. Inspect deployment-adapter and provider completion and fact counts in both reports.
 5. Manually review the relevant code or pull-request diff for assumptions the provider may have missed.
 
-Report schema v4 records deployment-adapter accounting, protocol-v2 provider coverage, and the exact code and
+Report schema v5 records deployment-adapter accounting, protocol-v2 provider coverage, optional consumer
+recommendations, and the exact code and
 deployment attributes that matched each finding. Protocol-v1 providers retain completion and fact counts without
 parsed-file coverage.
 Protocol v1 does not expose backend-specific discovery or skip telemetry.

@@ -4,7 +4,7 @@ Waldo owns orchestration and evaluation, not source-language analysis or deploym
 
 ```text
 existing deployment evidence -> deployment adapters -> deployment facts --\
-                                                                       policy join -> dispositions -> findings
+                                                                       policy join -> recommendation -> disposition -> findings
 source code -----------------> code providers -------> code facts ------/
 ```
 
@@ -28,6 +28,9 @@ deployments:
       resource: module.service
       with:
         varFiles: [production.tfvars]
+recommendations:
+  durable-deferred-execution:
+    instruction: Move required delayed work to a BullMQ queue backed by persistent Redis.
 ```
 
 The vocabulary is deliberately small:
@@ -46,6 +49,8 @@ using different entrypoints, and one artifact may be bound to several independen
   They emit objective facts and never evaluate source policy.
 - Code providers own source syntax, runtime semantics, framework behavior, package discovery, and dataflow.
 - Policies match normalized code facts and deployment facts. Rule IDs and severity remain data.
+- Recommendations are consumer-owned steering keyed by policy ID. They attach after a match and may name the
+  consumer's selected technology.
 - Dispositions annotate one stable finding. They do not modify facts, severity, or global behavior.
 - Reports retain every finding. CI fails only unresolved errors.
 
@@ -56,6 +61,11 @@ provider may understand house abstractions without making policies application-s
 Deployment adapters inspect existing artifacts but never create them implicitly. In particular, the Terraform adapter
 does not run Terraform, initialize providers, read state, or contact a backend. Unresolved properties remain absent;
 policy evaluation never treats an unknown fact as established.
+
+Recommendations do not participate in policy evaluation. They cannot create a finding or change its severity,
+disposition, evidence, or stable identity. Core treats their instruction and optional reference as opaque consumer
+data and includes them in human and JSON reports. Configuration rejects a recommendation whose policy ID is not in
+the loaded policy set.
 
 The same rule applies to generated Kubernetes configuration: Waldo reads raw or explicitly rendered manifests but
 does not invoke Helm, Kustomize, `kubectl`, or a control plane during `waldo check`.
@@ -110,8 +120,9 @@ source movement while changing it when the semantic subject changes.
 `waldo compare` separates introduced, resolved, changed, and unchanged findings by stable identity. A new unresolved
 error fails comparison; an unchanged unresolved error does not.
 
-Report schema v4 records successful deployment-adapter runs, provider coverage, normalized fact counts, deployments,
-loaded policies, and the exact code and deployment attributes that satisfied each policy. A failed adapter or
+Report schema v5 records successful deployment-adapter runs, provider coverage, normalized fact counts, deployments,
+loaded policies, the exact code and deployment attributes that satisfied each policy, and optional consumer
+recommendations. A failed adapter or
 provider prevents report creation and exits `2`. A partial protocol-v2
 provider produces an explicitly incomplete report and exits `2` unless `--allow-partial` is set. A successful
 zero-fact adapter is visible but does not prove full topology coverage.

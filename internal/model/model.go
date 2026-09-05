@@ -13,9 +13,9 @@ const (
 	// PolicySchemaVersion is the shared policy-document schema.
 	PolicySchemaVersion = 1
 	// ReportSchemaVersion is independent from the provider protocol and
-	// configuration schemas. Version 4 records provider coverage and both
-	// matched sides of each policy join.
-	ReportSchemaVersion = 4
+	// configuration schemas. Version 5 adds consumer recommendations to the
+	// provider coverage and policy-join evidence recorded by version 4.
+	ReportSchemaVersion = 5
 
 	AnalysisInputProviders = "providers"
 	AnalysisInputFactsFile = "facts-file"
@@ -44,6 +44,13 @@ const (
 type SourceLocation = protocol.SourceLocation
 type CodeFact = protocol.CodeFact
 
+// Recommendation is consumer-owned steering attached to a policy finding. It
+// does not alter the finding's evidence, severity, disposition, or identity.
+type Recommendation struct {
+	Instruction string `json:"instruction" yaml:"instruction"`
+	Reference   string `json:"reference,omitempty" yaml:"reference,omitempty"`
+}
+
 type Finding struct {
 	ID                string      `json:"id"`
 	PolicyID          string      `json:"policyId"`
@@ -54,11 +61,12 @@ type Finding struct {
 	Deployment        string      `json:"deployment,omitempty"`
 	// DeploymentUnit is retained only so schema-v1/v2 reports can be read for
 	// comparison. New reports leave it empty.
-	DeploymentUnit    string         `json:"deploymentUnit,omitempty"`
-	MatchedDeployment map[string]any `json:"matchedDeploymentFacts"`
-	MatchedCode       map[string]any `json:"matchedCodeFacts"`
-	CodeFact          CodeFact       `json:"codeFact"`
-	Message           string         `json:"message"`
+	DeploymentUnit    string          `json:"deploymentUnit,omitempty"`
+	MatchedDeployment map[string]any  `json:"matchedDeploymentFacts"`
+	MatchedCode       map[string]any  `json:"matchedCodeFacts"`
+	CodeFact          CodeFact        `json:"codeFact"`
+	Message           string          `json:"message"`
+	Recommendation    *Recommendation `json:"recommendation,omitempty"`
 }
 
 func (f Finding) FailsCI() bool {

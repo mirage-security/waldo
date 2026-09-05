@@ -70,6 +70,22 @@ func TestDecodePreservesArtifactAndDeploymentBinding(t *testing.T) {
 	}
 }
 
+func TestDecodePreservesPolicyRecommendations(t *testing.T) {
+	extra := `recommendations:
+  non-durable-deferred-execution:
+    instruction: Move delayed work to a BullMQ queue backed by persistent Redis.
+    reference: docs/engineering/bullmq.md
+`
+	configuration, err := Decode(strings.NewReader(validModel(extra)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recommendation := configuration.Recommendations["non-durable-deferred-execution"]
+	if recommendation.Instruction != "Move delayed work to a BullMQ queue backed by persistent Redis." || recommendation.Reference != "docs/engineering/bullmq.md" {
+		t.Fatalf("unexpected recommendation: %#v", recommendation)
+	}
+}
+
 func TestDecodeRejectsInvalidModel(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -85,6 +101,9 @@ func TestDecodeRejectsInvalidModel(t *testing.T) {
 		{name: "absolute deployment source", input: strings.Replace(validModel(""), "source: infra", "source: /infra", 1), want: "from.source"},
 		{name: "missing resource", input: strings.Replace(validModel(""), "resource: module.service", "resource: ''", 1), want: "from.resource"},
 		{name: "invalid provider protocol", input: validModel("providers:\n  - name: custom\n    command: [custom-provider]\n    protocolVersion: 99\n"), want: "protocolVersion must be 1 or 2"},
+		{name: "unknown recommendation policy", input: validModel("recommendations:\n  missing-policy:\n    instruction: Use BullMQ.\n"), want: "references unknown policy"},
+		{name: "missing recommendation instruction", input: validModel("recommendations:\n  durable-deferred-execution:\n    instruction: '  '\n"), want: "must include an instruction"},
+		{name: "blank recommendation reference", input: validModel("recommendations:\n  durable-deferred-execution:\n    instruction: Use BullMQ.\n    reference: '  '\n"), want: "reference cannot be blank"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

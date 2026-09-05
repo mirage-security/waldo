@@ -13,4 +13,9 @@ deployments:
       source: deployment/worker.yaml
       resource: worker
 
+recommendations:
+  durable-deferred-execution:
+    instruction: Move required delayed work to a BullMQ queue backed by persistent Redis.
+    reference: docs/engineering/bullmq.md
+
 dispositions: []

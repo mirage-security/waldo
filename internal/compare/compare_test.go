@@ -48,6 +48,18 @@ func TestReportsRecordsMatchedCodeEvidenceChanges(t *testing.T) {
 	}
 }
 
+func TestReportsRecordsRecommendationChanges(t *testing.T) {
+	baseFinding := finding("same", model.SeverityWarning, model.DispositionUnresolved)
+	baseFinding.Recommendation = &model.Recommendation{Instruction: "Use BullMQ."}
+	headFinding := baseFinding
+	headFinding.Recommendation = &model.Recommendation{Instruction: "Use Faktory."}
+
+	result := Reports(report(baseFinding), report(headFinding))
+	if len(result.Changed) != 1 || result.Unchanged != 0 {
+		t.Fatalf("recommendation change was not recorded: %#v", result)
+	}
+}
+
 func finding(id string, severity model.Severity, disposition model.Disposition) model.Finding {
 	return model.Finding{ID: id, Severity: severity, Disposition: disposition}
 }
