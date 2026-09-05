@@ -1,6 +1,6 @@
-policyId: replica-local-authority
+policyId: process-local-authority
 severity: warning
 disposition: false-positive
-reason: Framework dispatch durably populates this state before invoking the handler.
+reason: Durable storage is authoritative; the local catalog is replaceable.
 findings: 1
 failing: 0

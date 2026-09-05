@@ -1,9 +1,8 @@
 version: 1
 resources:
-  worker:
+  application:
     facts:
       process.restartable: true
       deployment.replicas.concurrent: true
       deployment.replicas.maxConcurrent: 3
       memory.scope: instance
-      scheduling.processLocal.durable: false

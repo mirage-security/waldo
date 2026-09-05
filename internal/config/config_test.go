@@ -38,8 +38,8 @@ func TestDecodeLoadsBuiltInPoliciesForBindingOnlyModel(t *testing.T) {
 	want := []string{
 		"durable-deferred-execution",
 		"non-durable-deferred-execution",
+		"process-local-authority",
 		"process-local-coordination",
-		"replica-local-authority",
 	}
 	if len(configuration.Policies) != len(want) {
 		t.Fatalf("loaded %d built-in policies, want %d: %#v", len(configuration.Policies), len(want), configuration.Policies)

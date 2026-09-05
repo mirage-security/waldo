@@ -1,0 +1,38 @@
+version: 2
+service: process-local-authority
+
+artifacts:
+  application:
+    source: app
+    entrypoint: runtime-options.ts
+
+deployments:
+  production:
+    artifact: application
+    from:
+      adapter: facts
+      source: deployment/replaceable.yaml
+      resource: application
+
+providers:
+  - name: javascript
+    command:
+      - go
+      - run
+      - ./cmd/waldo-javascript-provider
+      - --target
+      - examples/process-local-authority/app
+
+policyFiles:
+  - ../../policies/process-local-authority.yaml
+
+dispositions:
+  - finding: waldo:v2:cd99882ce46f98162eb8c4d86e6b01461b03f9f64f862123af784734ec950806
+    disposition: false-positive
+    reason: The catalog is loaded from durable storage; local entries are replaceable.
+  - finding: waldo:v2:6a870664af2b80fbc7380d09a67633814e11f2d3a2c074fff1e43100f11bd0aa
+    disposition: accepted
+    reason: Per-process runtime options are an accepted constraint for this example.
+  - finding: waldo:v2:2fe7e57c879c19cf511a19b1036e5ef06f8a1e00dd83da548b49aeb57e144d61
+    disposition: accepted
+    reason: The in-memory draft store is an accepted constraint for this example.

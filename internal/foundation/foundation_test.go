@@ -149,3 +149,64 @@ func TestProcessLocalCoordinationSourceProof(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessLocalAuthoritySourceProof(t *testing.T) {
+	if _, err := exec.LookPath("semgrep"); err != nil {
+		t.Skip("semgrep is not installed")
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration, err := config.Load(filepath.Join(root, "examples/process-local-authority/waldo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deployment.Resolve(context.Background(), root, &configuration); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	collection, err := provider.Collect(ctx, root, configuration.Providers)
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(collection.Facts) != 3 {
+		t.Fatalf("got %d facts, want 3: %#v", len(collection.Facts), collection.Facts)
+	}
+
+	wantSymbols := map[string]bool{
+		"findCachedCatalogEntry": false,
+		"loadDraft":              false,
+		"readOption":             false,
+	}
+	for _, fact := range collection.Facts {
+		if fact.Kind != "state-dependent-decision" || fact.Attributes["state.scope"] != "process-local" || fact.Attributes["state.role"] != "unknown" {
+			t.Fatalf("unexpected authority fact: %#v", fact)
+		}
+		_, exists := wantSymbols[fact.Symbol]
+		if !exists {
+			t.Fatalf("unexpected authority symbol %q", fact.Symbol)
+		}
+		wantSymbols[fact.Symbol] = true
+	}
+	for symbol, seen := range wantSymbols {
+		if !seen {
+			t.Fatalf("missing authority fact for %q", symbol)
+		}
+	}
+
+	findings, err := policy.Evaluate(configuration, collection.Facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := model.Summarize(findings)
+	if len(findings) != 3 || summary.Accepted != 2 || summary.FalsePositives != 1 || summary.Unresolved != 0 || summary.Failing != 0 {
+		t.Fatalf("unexpected disposition summary: findings=%#v summary=%#v", findings, summary)
+	}
+	for _, finding := range findings {
+		if finding.PolicyID != "process-local-authority" || finding.Severity != model.SeverityWarning {
+			t.Fatalf("unexpected authority finding: %#v", finding)
+		}
+	}
+}

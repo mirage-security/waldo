@@ -1,6 +1,6 @@
 policyId: process-local-authority
 severity: warning
 disposition: accepted
-reason: Per-process runtime options are an accepted constraint for this fixture.
+reason: The in-memory draft store is an accepted constraint for this fixture.
 findings: 1
 failing: 0

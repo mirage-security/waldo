@@ -15,13 +15,11 @@ deployments:
       resource: call-gateway
 
 providers:
-  - name: semgrep-typescript
+  - name: javascript
     command:
       - go
       - run
-      - ./cmd/waldo-semgrep-provider
-      - --config
-      - examples/process-local-coordination/semgrep.yaml
+      - ./cmd/waldo-javascript-provider
       - --target
       - examples/process-local-coordination/app
 

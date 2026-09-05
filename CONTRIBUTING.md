@@ -122,8 +122,10 @@ Use `error` only when the joined facts establish a direct contradiction—someth
 instance-local mutex cannot provide exclusion among independently executing instances.
 
 Use `warning` when the joined facts identify architectural risk but intent, provenance, or dataflow is not strong
-enough to establish a contradiction. `replica-local-authority` is intentionally warning-level because consulting local
-state may be a harmless optimization with a durable fallback.
+enough to establish a contradiction. `process-local-authority` is intentionally warning-level because consulting
+local state may be a harmless optimization with a durable fallback. Keep provider and deployment evidence precise,
+but do not split one developer decision into separate warning names for restart loss, replica divergence, or cache
+provenance. A distinct policy should identify a materially different consequence or severity.
 
 Use `info` when the result is evidence worth retaining but does not currently require review or block CI.
 

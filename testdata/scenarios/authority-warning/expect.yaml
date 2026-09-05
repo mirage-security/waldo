@@ -1,4 +1,4 @@
-policyId: replica-local-authority
+policyId: process-local-authority
 severity: warning
 disposition: unresolved
 findings: 1

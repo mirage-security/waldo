@@ -1,0 +1,1 @@
+{"id":"authority:draft-store","provider":"fixture","kind":"state-dependent-decision","source":{"path":"testdata/src/drafts/store.example","line":16},"symbol":"loadDraft","attributes":{"state.scope":"process-local","state.role":"authority","provenance.confidence":"bounded"}}

@@ -211,6 +211,86 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 	}
 }
 
+func TestProcessLocalAuthorityRequiresBothBoundaries(t *testing.T) {
+	fact := model.CodeFact{
+		ID:       "authority:local-state",
+		Provider: "fixture",
+		Kind:     "state-dependent-decision",
+		Source:   model.SourceLocation{Path: "src/state.example"},
+		Attributes: map[string]any{
+			"state.role":  "unknown",
+			"state.scope": "process-local",
+		},
+	}
+	rule := config.Policy{
+		ID:       "process-local-authority",
+		Title:    "Application behavior may depend on state held by one process",
+		Severity: model.SeverityWarning,
+		When: config.Conditions{
+			Deployment: map[string]any{
+				"memory.scope":        "instance",
+				"process.restartable": true,
+			},
+			Code: config.CodeConditions{Kind: "state-dependent-decision", Attributes: map[string]any{
+				"state.role":  map[string]any{"oneOf": []any{"authority", "unknown"}},
+				"state.scope": "process-local",
+			}},
+		},
+		Message: "Application behavior may depend on state held by one process.",
+	}
+
+	tests := []struct {
+		name        string
+		withFact    bool
+		stateRole   string
+		restartable bool
+		memoryScope string
+		want        int
+	}{
+		{name: "code and deployment match", withFact: true, stateRole: "unknown", restartable: true, memoryScope: "instance", want: 1},
+		{name: "code missing", restartable: true, memoryScope: "instance"},
+		{name: "process is not replaceable", withFact: true, stateRole: "unknown", memoryScope: "instance"},
+		{name: "memory is shared", withFact: true, stateRole: "unknown", restartable: true, memoryScope: "deployment"},
+		{name: "durably backed cache", withFact: true, stateRole: "cache", restartable: true, memoryScope: "instance"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configuration := config.Config{
+				Service:  "fixture",
+				Policies: []config.Policy{rule},
+				Artifacts: map[string]config.Artifact{
+					"server": {ResolvedSource: "src", Entrypoint: "server.ts"},
+				},
+				Deployments: map[string]config.Deployment{
+					"production": {
+						Artifact: "server",
+						Facts: map[string]any{
+							"memory.scope":        test.memoryScope,
+							"process.restartable": test.restartable,
+						},
+					},
+				},
+			}
+			var facts []model.CodeFact
+			if test.withFact {
+				configuredFact := fact
+				configuredFact.Attributes = map[string]any{
+					"state.role":  test.stateRole,
+					"state.scope": "process-local",
+				}
+				facts = []model.CodeFact{configuredFact}
+			}
+			findings, err := Evaluate(configuration, facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(findings) != test.want {
+				t.Fatalf("got %d findings, want %d: %#v", len(findings), test.want, findings)
+			}
+		})
+	}
+}
+
 func TestNonDurableDeferredExecutionRequiresBothBoundaries(t *testing.T) {
 	configuration, err := config.Load(filepath.Join("..", "..", "testdata", "waldo.yaml"))
 	if err != nil {
