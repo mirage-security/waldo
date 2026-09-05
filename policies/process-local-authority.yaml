@@ -1,0 +1,21 @@
+version: 1
+
+policies:
+  - id: process-local-authority
+    title: Application behavior may depend on state held by one process
+    severity: warning
+    when:
+      deployment:
+        process.restartable: true
+        memory.scope: instance
+      code:
+        kind: state-dependent-decision
+        attributes:
+          state.scope: process-local
+          state.role:
+            oneOf:
+              - authority
+              - unknown
+    message: >-
+      Application behavior may depend on state held by one process. That state can disappear when the process stops or
+      differ between instances.

@@ -72,6 +72,10 @@ waldo check --config services/reporting/waldo.yaml
 [`examples/terraform-ecs-service/`](examples/terraform-ecs-service/) contains an executable version of this pattern
 with standalone source, Terraform configuration, and a shared Waldo policy.
 
+[`examples/process-local-authority/`](examples/process-local-authority/) shows how one warning covers local state that
+is accepted application behavior, an intentional temporary constraint, or a false-positive because durable storage
+remains authoritative.
+
 This file does not repeat Terraform's topology. It binds the `server` artifact to the existing deployment resource:
 
 - `adapter` says how Waldo reads the deployment evidence;

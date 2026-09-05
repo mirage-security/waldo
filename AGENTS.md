@@ -10,7 +10,7 @@ useful. A core policy belongs here only when its conclusion requires both code f
 ## Current foundation
 
 The source-backed invariant families currently claimed by the project are deferred-execution durability and
-process-local coordination. The durability family contains the strict `durable-deferred-execution` error and the
+process-local authority. The durability family contains the strict `durable-deferred-execution` error and the
 `non-durable-deferred-execution` warning used when a provider leaves correctness criticality unknown. The strict
 durable-execution proof uses:
 
@@ -24,11 +24,13 @@ durable-execution proof uses:
 Both models must continue to load the same policy and produce the same stable unresolved-error identity. Preserve
 `internal/foundation/TestOneInvariantAcrossTwoDeploymentModels` as the proof of that claim.
 
-The coordination proof uses the separate Semgrep adapter, a narrow provider-side source rule, one shared policy, and
-replicated/single-instance deployment models under `examples/process-local-coordination/`. Error severity requires a
-high-confidence fact with deployment-wide required scope. `replica-local-authority` remains a warning; a local cache
-under multiple replicas is not by itself an error. Do not add named lock, dedupe, uniqueness, or leadership variants
-until a real source example requires a distinct semantic fact or message.
+The process-local authority family presents one broad `process-local-authority` warning to developers. Its provider
+facts retain whether local state is known to be authoritative or whether its role remains unknown. A proven durable
+cache does not match; uncertain cache and framework behavior can be retained with accepted or false-positive
+dispositions. The same family contains the narrower `process-local-coordination` error, whose proof uses the built-in
+JavaScript provider, a high-confidence source rule, one shared policy, and replicated/single-instance deployment
+models under `examples/process-local-coordination/`. Do not add named lock, dedupe, uniqueness, leadership, volatile
+state, or replica-divergence variants until a real example requires a distinct developer-facing consequence.
 
 ## Architectural ownership
 

@@ -17,20 +17,23 @@ invariant. Proven correctness-critical work is an error; work whose criticality 
 not turn every timer into an error. New durability work should broaden provider coverage for the invariant before
 adding API-shaped variants of the same rule.
 
-## Coordination
+## Process-local authority
 
 | Policy | Status | Intended claim |
 | --- | --- | --- |
-| `replica-local-authority` | Draft warning | A correctness path consults instance-local mutable state while multiple instances execute. |
+| `process-local-authority` | Source-backed warning | Application behavior may depend on mutable state held by one replaceable process. |
 | `process-local-coordination` | Source-backed error | High-confidence process-local authority cannot provide required deployment-wide coordination among concurrent instances. |
 | `process-local-lock` | Future specialization | Instance-local exclusion cannot provide fleet-wide exclusion. |
 | `process-local-deduplication` | Future error | Instance-local state cannot provide deployment-wide deduplication. |
 | `process-local-uniqueness` | Future error | Instance-local state cannot enforce uniqueness across independently executing instances. |
 | `process-local-leadership` | Future error | Instance-local authority cannot establish a unique deployment-wide coordinator. |
 
-The broad authority rule remains a warning because local state may be an optimization backed by a durable source.
-`process-local-coordination` requires explicit high-confidence provider evidence and deployment-wide required scope.
-The narrower named mechanisms should be added only when real examples justify distinct facts or messages.
+The broad authority rule remains one developer-facing warning across possible restart loss, replica divergence, and
+uncertain cache provenance. A provider that proves the state is only a cache with a durable fallback does not produce
+that warning; otherwise developers can record an accepted or false-positive disposition without hiding the evidence.
+`process-local-coordination` remains separate because explicit high-confidence provider evidence and deployment-wide
+required scope establish a stronger error. The narrower named mechanisms should be added only when real examples
+justify materially different facts or messages.
 
 ## Consistency
 

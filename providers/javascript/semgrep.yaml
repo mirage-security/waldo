@@ -1,4 +1,37 @@
 rules:
+  - id: waldo.javascript.process-local-state-handoff
+    languages: [javascript, typescript]
+    severity: INFO
+    message: "waldo-symbol:$STATE"
+    metadata:
+      waldo:
+        id: javascript.process-local-state-handoff
+        kind: coordination
+        symbolMessagePrefix: "waldo-symbol:"
+        attributes:
+          coordination.authority: process-local
+          coordination.confidence: high
+          coordination.requiredScope: deployment
+          coordination.scope: cross-request
+          coordination.semantics: state-handoff
+    patterns:
+      - pattern: |
+          const $STATE: $TYPE = {};
+          ...
+          export const $WRITE = (...) => {
+            ...
+            $STATE[$KEY] = $VALUE;
+            ...
+          };
+          ...
+          export const $READ = (...) => {
+            ...
+            return $STATE[$READ_KEY];
+          };
+      - metavariable-regex:
+          metavariable: $READ
+          regex: ^has[A-Z].*
+
   - id: waldo.javascript.assigned-async-timeout
     languages: [javascript, typescript]
     severity: INFO
@@ -24,3 +57,113 @@ rules:
       - metavariable-regex:
           metavariable: $CALLBACK
           regex: ^async\b
+
+  # A small structural fact for object-backed module state: one helper writes
+  # entries and another treats a local miss as absence. Whether the state is
+  # truly authoritative remains unknown and is decided by Waldo's warning and
+  # any recorded disposition.
+  - id: waldo.javascript.module-object-state-decision
+    languages: [javascript, typescript]
+    severity: INFO
+    message: "waldo-symbol:$READ"
+    metadata:
+      waldo:
+        id: javascript.module-object-state-decision
+        kind: state-dependent-decision
+        symbolMessagePrefix: "waldo-symbol:"
+        attributes:
+          provenance.confidence: bounded
+          state.role: unknown
+          state.scope: process-local
+    pattern: |
+      const $STATE: $TYPE = {};
+      ...
+      const $WRITE = (...) => {
+        ...
+        $STATE[$WRITE_KEY] = $VALUE;
+        ...
+      };
+      ...
+      const $READ = (...) => {
+        ...
+        if ($STATE[$READ_KEY]) {
+          ...
+          return $STATE[$READ_KEY];
+        }
+        ...
+        return null;
+      };
+
+  # Map-backed state is similarly reported when one operation mutates it and an
+  # exported operation reads it across calls. The provider does not guess
+  # whether an unseen durable fallback makes that behavior safe.
+  - id: waldo.javascript.module-map-state-decision
+    languages: [javascript, typescript]
+    severity: INFO
+    message: "waldo-symbol:$READ"
+    metadata:
+      waldo:
+        id: javascript.module-map-state-decision
+        kind: state-dependent-decision
+        symbolMessagePrefix: "waldo-symbol:"
+        attributes:
+          provenance.confidence: bounded
+          state.role: unknown
+          state.scope: process-local
+    pattern-either:
+      - pattern: |
+          const $STATE = new Map<$KEY_TYPE, $VALUE_TYPE>();
+          ...
+          export function $WRITE(...) {
+            ...
+            $STATE.set(...);
+            ...
+          }
+          ...
+          export function $READ(...) {
+            ...
+            return $STATE.get(...) ?? ...;
+            ...
+          }
+      - pattern: |
+          const $STATE = new Map();
+          ...
+          export function $WRITE(...) {
+            ...
+            $STATE.set(...);
+            ...
+          }
+          ...
+          export function $READ(...) {
+            ...
+            return $STATE.get(...) ?? ...;
+            ...
+          }
+      - pattern: |
+          const $STATE = new Map<$KEY_TYPE, $VALUE_TYPE>();
+          ...
+          async function $WRITE(...) {
+            ...
+            $STATE.set(...);
+            ...
+          }
+          ...
+          export function $READ(...) {
+            ...
+            const $LOCAL = $STATE.get(...);
+            ...
+          }
+      - pattern: |
+          const $STATE = new Map<$KEY_TYPE, $VALUE_TYPE>();
+          ...
+          function $WRITE(...) {
+            ...
+            $STATE.set(...);
+            ...
+          }
+          ...
+          export function $READ(...) {
+            ...
+            const $LOCAL = $STATE.get(...);
+            ...
+          }

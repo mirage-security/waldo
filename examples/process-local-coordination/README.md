@@ -1,8 +1,9 @@
 # Process-local coordination proof
 
 This example isolates the source shape that motivated Waldo's second invariant. One request writes module-local state
-and another request consults it as a predicate. The provider-specific Semgrep rule normalizes that syntax to a
-high-confidence `coordination` fact; it does not make a deployment judgment.
+and another request consults it as a predicate. The built-in JavaScript provider normalizes that syntax to a
+high-confidence `coordination` fact; its Semgrep backend remains an implementation detail and makes no deployment
+judgment.
 
 The same artifact and policy are evaluated against two deployment bindings through the `facts` adapter:
 

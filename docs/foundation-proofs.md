@@ -42,11 +42,33 @@ also verifies that both deployment adapters completed and preserves that claim:
 go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
 ```
 
+## Process-local authority
+
+The [process-local authority example](../examples/process-local-authority/) uses three synthetic JavaScript shapes: a
+process-local option table, an in-memory source of record, and a replaceable cache backed by durable storage. The
+provider reports the same bounded source fact for each because syntax alone cannot establish the role of the state.
+
+The policy joins those facts with a replaceable deployment whose memory is instance-scoped. Developers see one
+`process-local-authority` warning and can accept an intentional consequence or mark a durable cache false-positive
+without removing the evidence.
+
+```sh
+go run ./cmd/waldo check \
+  --root . \
+  --config examples/process-local-authority/waldo.yaml
+
+go test ./internal/foundation -run TestProcessLocalAuthoritySourceProof -v
+```
+
+The foundation test verifies two accepted findings and one false-positive finding. A separate policy matrix removes
+the code premise and the deployment premise independently, and confirms that a provider fact establishing
+`state.role: cache` produces no finding.
+
 ## Process-local coordination
 
-The second proof uses the [Semgrep adapter](../providers/semgrep/README.md). A narrow provider-side rule recognizes
-module-local state exposed as a deployment-scoped cross-request predicate and emits one analyzer-neutral
-`coordination` fact.
+The stricter coordination proof uses the built-in [JavaScript provider](../providers/javascript/README.md), whose current backend is
+the separate [Semgrep adapter](../providers/semgrep/README.md). A narrow provider-side rule recognizes module-local
+state exposed as a deployment-scoped cross-request predicate and emits one analyzer-neutral `coordination` fact.
 
 ```sh
 go run ./cmd/waldo check \
@@ -62,8 +84,8 @@ The replicated model intentionally exits `1` with `process-local-coordination`. 
 with no finding. Both report that the deployment adapter and the same code provider completed, proving that the zero
 result comes from the deployment counterfactual rather than silent analysis.
 
-This proof requires Semgrep on `PATH`. The adapter translates only rules carrying explicit `metadata.waldo`; ordinary
-lint and security results are ignored.
+This proof requires Semgrep on `PATH`. The JavaScript provider owns the backend rule, and the adapter translates only
+results carrying explicit `metadata.waldo`; ordinary lint and security results are ignored.
 
 ## Interpreting zero findings
 

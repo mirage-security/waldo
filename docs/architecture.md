@@ -84,10 +84,10 @@ The built-in catalog records four reusable policies across two source-backed inv
 
 1. Correctness-critical deferred work must use durable execution authority when its process can be replaced.
 2. Deferred work whose criticality is unknown receives a warning when process-local scheduling can be lost.
-3. Deployment-scoped coordination cannot use process-local authority when independently executing instances have
+3. Application behavior that may depend on state held by one replaceable process deserves warning-level review.
+   Providers retain whether that state is known to be authoritative or its role remains unknown.
+4. Deployment-scoped coordination cannot use process-local authority when independently executing instances have
    instance-scoped memory. Error severity requires a high-confidence code fact.
-4. A decision that may treat process-local state as authoritative in a multi-instance deployment deserves
-   warning-level review.
 
 These policies do not imply that every timer, cache, or local state value is wrong. Deployment adapters normalize
 platform behavior; policies name only the resulting architectural properties.
