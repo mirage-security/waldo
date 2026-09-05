@@ -41,10 +41,6 @@ const (
 	DispositionFalsePositive Disposition = "false-positive"
 )
 
-func (d Disposition) Valid() bool {
-	return d == DispositionUnresolved || d == DispositionAccepted || d == DispositionFalsePositive
-}
-
 type SourceLocation = protocol.SourceLocation
 type CodeFact = protocol.CodeFact
 

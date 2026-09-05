@@ -24,12 +24,12 @@ func TestRunProviderBoundary(t *testing.T) {
 	}
 }
 
-func TestCollectWithSummaryAccountsForZeroFactProvider(t *testing.T) {
+func TestCollectAccountsForZeroFactProvider(t *testing.T) {
 	configured := config.Provider{
 		Name:    "empty-provider",
 		Command: []string{os.Args[0], "-test.run=TestProviderHelper", "--", "empty"},
 	}
-	collection, err := CollectWithSummary(context.Background(), t.TempDir(), []config.Provider{configured})
+	collection, err := Collect(context.Background(), t.TempDir(), []config.Provider{configured})
 	if err != nil {
 		t.Fatal(err)
 	}

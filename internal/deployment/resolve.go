@@ -84,16 +84,12 @@ func Resolve(ctx context.Context, root string, configuration *config.Config) ([]
 		configured.Facts = result.Facts
 		configuration.Deployments[name] = configured
 		runs = append(runs, model.DeploymentAdapterRun{
-			Deployment: identity(configuration.Service, name),
+			Deployment: configuration.Service + "/" + name,
 			Adapter:    configured.From.Adapter,
 			Facts:      len(result.Facts),
 		})
 	}
 	return runs, nil
-}
-
-func identity(service, deployment string) string {
-	return service + "/" + deployment
 }
 
 func resolveOne(ctx context.Context, baseDir, adapter string, request protocol.DeploymentRequest) (protocol.DeploymentResult, error) {

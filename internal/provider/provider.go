@@ -22,15 +22,7 @@ type Collection struct {
 	Runs  []model.ProviderRun
 }
 
-func Collect(ctx context.Context, root string, providers []config.Provider) ([]model.CodeFact, error) {
-	collection, err := CollectWithSummary(ctx, root, providers)
-	if err != nil {
-		return nil, err
-	}
-	return collection.Facts, nil
-}
-
-func CollectWithSummary(ctx context.Context, root string, providers []config.Provider) (Collection, error) {
+func Collect(ctx context.Context, root string, providers []config.Provider) (Collection, error) {
 	var facts []model.CodeFact
 	runs := make([]model.ProviderRun, 0, len(providers))
 	for _, configured := range providers {
@@ -86,9 +78,6 @@ func LoadFacts(path string, root string) ([]model.CodeFact, error) {
 		return nil, err
 	}
 	for index := range facts {
-		if facts[index].Provider == "" {
-			facts[index].Provider = "facts"
-		}
 		if err := normalizeFactPath(root, &facts[index]); err != nil {
 			return nil, fmt.Errorf("fact %q: %w", facts[index].ID, err)
 		}
