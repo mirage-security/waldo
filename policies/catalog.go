@@ -7,7 +7,6 @@ package policies
 import (
 	"embed"
 	"fmt"
-	"sort"
 )
 
 //go:embed *.yaml
@@ -20,19 +19,14 @@ func Documents() ([][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read built-in policy catalog: %w", err)
 	}
-	names := make([]string, 0, len(entries))
+	documents := make([][]byte, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			names = append(names, entry.Name())
+		if entry.IsDir() {
+			continue
 		}
-	}
-	sort.Strings(names)
-
-	documents := make([][]byte, 0, len(names))
-	for _, name := range names {
-		document, err := catalog.ReadFile(name)
+		document, err := catalog.ReadFile(entry.Name())
 		if err != nil {
-			return nil, fmt.Errorf("read built-in policy %q: %w", name, err)
+			return nil, fmt.Errorf("read built-in policy %q: %w", entry.Name(), err)
 		}
 		documents = append(documents, document)
 	}

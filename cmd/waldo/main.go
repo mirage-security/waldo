@@ -96,7 +96,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			configuration.Providers = builtInProviders(configuration)
 		}
 		var collection provider.Collection
-		collection, err = provider.CollectWithSummary(ctx, root, configuration.Providers)
+		collection, err = provider.Collect(ctx, root, configuration.Providers)
 		facts = collection.Facts
 		providerRuns = collection.Runs
 	}

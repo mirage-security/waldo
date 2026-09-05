@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -28,7 +27,7 @@ type module struct {
 // beneath request.Root. Options currently accepts varFiles, a list of paths
 // relative to request.Source.
 func Analyze(request protocol.DeploymentRequest) (protocol.DeploymentResult, error) {
-	if _, err := withinRoot(request.Root, request.Source); err != nil {
+	if err := withinRoot(request.Root, request.Source); err != nil {
 		return protocol.DeploymentResult{}, fmt.Errorf("source: %w", err)
 	}
 	info, err := os.Stat(request.Source)
@@ -156,7 +155,7 @@ func loadModule(root, dir string, supplied map[string]cty.Value, varFiles []stri
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(dir, filepath.FromSlash(path))
 		}
-		if _, err := withinRoot(root, path); err != nil {
+		if err := withinRoot(root, path); err != nil {
 			return nil, fmt.Errorf("varFiles entry %q: %w", configuredPath, err)
 		}
 		values, err := parseVarFile(path)
@@ -214,7 +213,7 @@ func loadChild(root string, parent *module, block *hclsyntax.Block) (*module, st
 		return nil, source, nil
 	}
 	childDir := filepath.Join(parent.dir, filepath.FromSlash(source))
-	if _, err := withinRoot(root, childDir); err != nil {
+	if err := withinRoot(root, childDir); err != nil {
 		return nil, "", fmt.Errorf("module %q: %w", block.Labels[0], err)
 	}
 	inputs := make(map[string]cty.Value)
@@ -444,17 +443,15 @@ func parseDirectory(dir string) (*hclsyntax.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read source: %w", err)
 	}
-	filenames := make([]string, 0)
+	merged := &hclsyntax.Body{Attributes: hclsyntax.Attributes{}}
+	parser := hclparse.NewParser()
+	found := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tf") {
 			continue
 		}
-		filenames = append(filenames, filepath.Join(dir, entry.Name()))
-	}
-	sort.Strings(filenames)
-	merged := &hclsyntax.Body{Attributes: hclsyntax.Attributes{}}
-	parser := hclparse.NewParser()
-	for _, filename := range filenames {
+		found = true
+		filename := filepath.Join(dir, entry.Name())
 		file, diagnostics := parser.ParseHCLFile(filename)
 		if diagnostics.HasErrors() {
 			return nil, fmt.Errorf("parse %s: %s", filename, diagnostics.Error())
@@ -468,7 +465,7 @@ func parseDirectory(dir string) (*hclsyntax.Body, error) {
 		}
 		merged.Blocks = append(merged.Blocks, body.Blocks...)
 	}
-	if len(filenames) == 0 {
+	if !found {
 		return nil, fmt.Errorf("source contains no .tf files")
 	}
 	return merged, nil
@@ -564,21 +561,21 @@ func unindex(name string) string {
 	return name
 }
 
-func withinRoot(root, candidate string) (string, error) {
+func withinRoot(root, candidate string) error {
 	canonicalRoot, err := filepath.EvalSymlinks(filepath.Clean(root))
 	if err != nil {
-		return "", fmt.Errorf("resolve analysis root: %w", err)
+		return fmt.Errorf("resolve analysis root: %w", err)
 	}
 	canonicalCandidate, err := filepath.EvalSymlinks(filepath.Clean(candidate))
 	if err != nil {
-		return "", fmt.Errorf("resolve path: %w", err)
+		return fmt.Errorf("resolve path: %w", err)
 	}
 	relative, err := filepath.Rel(canonicalRoot, canonicalCandidate)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q is outside analysis root", candidate)
+		return fmt.Errorf("path %q is outside analysis root", candidate)
 	}
-	return relative, nil
+	return nil
 }

@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/mirage-security/waldo/protocol"
 	javascriptprovider "github.com/mirage-security/waldo/providers/javascript"
+	"github.com/mirage-security/waldo/providers/providercmd"
 )
 
 type values []string
@@ -56,45 +54,18 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
 
-	decoder := json.NewDecoder(input)
-	decoder.DisallowUnknownFields()
-	var request protocol.Request
-	if err := decoder.Decode(&request); err != nil {
-		return fmt.Errorf("decode provider request: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err != nil {
-			return fmt.Errorf("decode provider request: %w", err)
-		}
-		return fmt.Errorf("provider request must contain one JSON object")
-	}
-	if request.ProtocolVersion != protocol.Version {
-		return fmt.Errorf("protocolVersion must be %d", protocol.Version)
-	}
-	if request.Root == "" || !filepath.IsAbs(request.Root) {
-		return fmt.Errorf("root must be an absolute path")
-	}
-	facts, err := javascriptprovider.Analyze(ctx, request.Root, javascriptprovider.Options{
-		SemgrepExecutable: executable,
-		Targets:           targets,
-		Excludes:          effectiveExcludes(excludes),
+	return providercmd.Run(input, output, func(request protocol.Request) ([]protocol.CodeFact, error) {
+		return javascriptprovider.Analyze(ctx, request.Root, javascriptprovider.Options{
+			SemgrepExecutable: executable,
+			Targets:           targets,
+			Excludes:          effectiveExcludes(excludes),
+		})
 	})
-	if err != nil {
-		return err
-	}
-	encoder := json.NewEncoder(output)
-	for _, fact := range facts {
-		if err := encoder.Encode(fact); err != nil {
-			return fmt.Errorf("encode fact: %w", err)
-		}
-	}
-	return nil
 }
 
 func effectiveExcludes(configured values) []string {
 	if len(configured) > 0 {
-		return append([]string(nil), configured...)
+		return configured
 	}
-	return append([]string(nil), defaultExcludes...)
+	return defaultExcludes
 }

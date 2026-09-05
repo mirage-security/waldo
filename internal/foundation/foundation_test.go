@@ -57,11 +57,12 @@ func TestOneInvariantAcrossTwoDeploymentModels(t *testing.T) {
 		configuredDeployment := configuration.Deployments["expiry-notifier"]
 		executionModels = append(executionModels, configuredDeployment.Facts["platform.executionModel"])
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		facts, err := provider.Collect(ctx, root, configuration.Providers)
+		collection, err := provider.Collect(ctx, root, configuration.Providers)
 		cancel()
 		if err != nil {
 			t.Fatalf("collect facts for %s: %v", modelPath, err)
 		}
+		facts := collection.Facts
 		exampleFacts := 0
 		criticalFacts := 0
 		for _, fact := range facts {
@@ -126,11 +127,12 @@ func TestProcessLocalCoordinationSourceProof(t *testing.T) {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			facts, err := provider.Collect(ctx, root, configuration.Providers)
+			collection, err := provider.Collect(ctx, root, configuration.Providers)
 			cancel()
 			if err != nil {
 				t.Fatal(err)
 			}
+			facts := collection.Facts
 			if len(facts) != 1 || facts[0].Kind != "coordination" || facts[0].Attributes["coordination.confidence"] != "high" {
 				t.Fatalf("unexpected provider facts: %#v", facts)
 			}
