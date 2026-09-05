@@ -35,7 +35,7 @@ func TestCheckJSONAndExitPolicy(t *testing.T) {
 	if report.Summary.Failing != 1 || len(report.Findings) != 1 {
 		t.Fatalf("unexpected report: %#v", report)
 	}
-	if report.SchemaVersion != model.ReportSchemaVersion || report.Analysis.Input != model.AnalysisInputFactsFile || report.Analysis.CodeFacts != 1 {
+	if report.SchemaVersion != model.ReportSchemaVersion || report.Analysis.Input != model.AnalysisInputFactsFile || report.Analysis.CodeFacts != 1 || len(report.Analysis.DeploymentAdapterRuns) != 1 {
 		t.Fatalf("unexpected analysis accounting: %#v", report.Analysis)
 	}
 }
@@ -46,20 +46,26 @@ func TestCheckMakesZeroFindingsAuditable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configuration := fmt.Sprintf(`version: 1
-
-deployment:
-  units:
-    worker:
-      source:
-        root: .
-      facts:
-        process.restartable: true
+	configuration := fmt.Sprintf(`version: 2
+service: empty
+artifacts:
+  worker:
+    entrypoint: worker.ts
+deployments:
+  worker:
+    artifact: worker
+    from:
+      adapter: facts
+      source: deployment.yaml
+      resource: worker
 
 providers:
   - name: empty-provider
     command: [%q, -test.run=TestEmptyProviderHelper, --, empty]
 `, executable)
+	if err := os.WriteFile(filepath.Join(root, "deployment.yaml"), []byte("version: 1\nresources:\n  worker:\n    facts:\n      process.restartable: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(root, "waldo.yaml"), []byte(configuration), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +79,7 @@ providers:
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.Summary.Total != 0 || report.Analysis.CodeFacts != 0 || report.Analysis.DeploymentUnits != 1 {
+	if report.Summary.Total != 0 || report.Analysis.CodeFacts != 0 || report.Analysis.Deployments != 1 {
 		t.Fatalf("zero result is not accounted for: %#v", report)
 	}
 	if len(report.Analysis.ProviderRuns) != 1 || report.Analysis.ProviderRuns[0].Name != "empty-provider" || report.Analysis.ProviderRuns[0].CodeFacts != 0 {
@@ -86,8 +92,9 @@ providers:
 	if exitCode != 0 {
 		t.Fatalf("got exit %d, want 0; stderr: %s", exitCode, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Analysis: 1 provider completed; 0 code facts; 1 deployment unit; 4 policies.") ||
+	if !strings.Contains(stdout.String(), "Analysis: 1 provider completed; 0 code facts; 1 deployment; 4 policies.") ||
 		!strings.Contains(stdout.String(), "empty-provider: 0 code facts") ||
+		!strings.Contains(stdout.String(), "empty/worker: deployment adapter facts emitted 1 fact") ||
 		!strings.Contains(stdout.String(), "0 findings") {
 		t.Fatalf("human report does not explain zero result:\n%s", stdout.String())
 	}
@@ -115,6 +122,21 @@ func TestReadReportAcceptsSchemaVersionOne(t *testing.T) {
 	}
 }
 
+func TestReadReportNormalizesSchemaVersionTwoDeploymentNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.report.json")
+	contents := `{"schemaVersion":2,"generatedAt":"2026-01-01T00:00:00Z","root":"/tmp/source","analysis":{"input":"facts-file","providerRuns":[],"codeFacts":0,"deploymentUnits":1,"policies":4},"findings":[{"id":"waldo:v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","policyId":"legacy","policyTitle":"Legacy","severity":"warning","disposition":"unresolved","deploymentUnit":"worker","matchedDeploymentFacts":{},"codeFact":{"id":"fact","kind":"example","source":{"path":"src/example"}},"message":"Legacy."}],"summary":{}}`
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := readReport(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Analysis.Deployments != 1 || report.Findings[0].Deployment != "worker" {
+		t.Fatalf("legacy deployment names were not normalized: %#v", report)
+	}
+}
+
 func TestCheckFailsClosedWhenBuiltInProviderIsMissing(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
@@ -129,12 +151,19 @@ func TestCheckFailsClosedWhenBuiltInProviderIsMissing(t *testing.T) {
 	}
 }
 
-func TestBuiltInProviderTargetsDistinctDeploymentSourceRoots(t *testing.T) {
-	providers := builtInProviders(config.Deployment{Units: map[string]config.DeploymentUnit{
-		"api-http":       {Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/http.ts"}},
-		"api-worker":     {Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/worker.ts"}},
-		"reporting-http": {Source: config.DeploymentSource{Root: "services/reporting", Entrypoint: "src/http.ts"}},
-	}})
+func TestBuiltInProviderTargetsDistinctArtifactSourceRoots(t *testing.T) {
+	providers := builtInProviders(config.Config{
+		Artifacts: map[string]config.Artifact{
+			"api-http":       {ResolvedSource: "services/api", Entrypoint: "src/http.ts"},
+			"api-worker":     {ResolvedSource: "services/api", Entrypoint: "src/worker.ts"},
+			"reporting-http": {ResolvedSource: "services/reporting", Entrypoint: "src/http.ts"},
+		},
+		Deployments: map[string]config.Deployment{
+			"public":    {Artifact: "api-http"},
+			"worker":    {Artifact: "api-worker"},
+			"reporting": {Artifact: "reporting-http"},
+		},
+	})
 	want := []string{
 		"waldo-javascript-provider",
 		"--target", "services/api",

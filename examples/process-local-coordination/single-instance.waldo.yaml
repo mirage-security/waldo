@@ -1,15 +1,18 @@
-version: 1
+version: 2
+service: process-local-coordination
 
-deployment:
-  units:
-    call-gateway:
-      source:
-        root: examples/process-local-coordination/app
-        entrypoint: state.ts
-      facts:
-        platform.executionModel: orchestrated-container
-        process.instances.concurrent: 1
-        memory.scope: instance
+artifacts:
+  gateway:
+    source: app
+    entrypoint: state.ts
+
+deployments:
+  call-gateway:
+    artifact: gateway
+    from:
+      adapter: facts
+      source: deployment/single-instance.yaml
+      resource: call-gateway
 
 providers:
   - name: semgrep-typescript

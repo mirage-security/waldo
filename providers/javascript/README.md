@@ -19,7 +19,7 @@ the error-level `durable-deferred-execution` invariant still requires separate e
 `correctness.critical: true`.
 
 With a topology-only `waldo.yaml`, Waldo selects this provider automatically and derives targets from deployment
-`source.root` values. Repeated roots are scanned once. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript
+artifact source values. Repeated sources are scanned once. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript
 files are excluded by default.
 
 An explicit provider entry is an advanced full override. For example:
@@ -35,7 +35,7 @@ providers:
       - "**/*.test.ts"
 ```
 
-Targets and exclusions select source owned by the deployed unit; repeat either flag as needed. Exclusions are
+Targets and exclusions select source owned by the deployed artifact; repeat either flag as needed. Exclusions are
 provider configuration rather than backend configuration, so consumers do not depend on Semgrep's private rule
 format.
 

@@ -1,16 +1,18 @@
-version: 1
+version: 2
+service: durable-deferred-work
 
-deployment:
-  units:
-    expiry-notifier:
-      source:
-        root: examples/durable-deferred-work/app
-        entrypoint: expiry.go
-      facts:
-        platform.executionModel: orchestrated-container
-        process.restartable: true
-        process.replicas: 3
-        scheduling.processLocal.durable: false
+artifacts:
+  app:
+    source: app
+    entrypoint: expiry.go
+
+deployments:
+  expiry-notifier:
+    artifact: app
+    from:
+      adapter: facts
+      source: deployment/container.yaml
+      resource: expiry-notifier
 
 providers:
   - name: go-ast

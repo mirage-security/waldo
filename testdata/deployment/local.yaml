@@ -1,0 +1,10 @@
+version: 1
+resources:
+  application:
+    facts:
+      process.restartable: true
+      deployment.replicas.concurrent: false
+      deployment.replicas.maxConcurrent: 1
+      memory.scope: instance
+      scheduling.processLocal.durable: false
+      memory.processLocal.authoritative: false

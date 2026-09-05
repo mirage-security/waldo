@@ -15,6 +15,7 @@ import (
 
 	comparepkg "github.com/mirage-security/waldo/internal/compare"
 	"github.com/mirage-security/waldo/internal/config"
+	"github.com/mirage-security/waldo/internal/deployment"
 	"github.com/mirage-security/waldo/internal/model"
 	"github.com/mirage-security/waldo/internal/policy"
 	"github.com/mirage-security/waldo/internal/provider"
@@ -56,7 +57,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rootFlag := flags.String("root", ".", "source tree to analyze")
-	configFlag := flags.String("config", "waldo.yaml", "deployment model")
+	configFlag := flags.String("config", "waldo.yaml", "service and deployment binding model")
 	factsFlag := flags.String("facts", "", "JSONL facts file; bypasses configured providers")
 	jsonFlag := flags.Bool("json", false, "write a machine-readable report")
 	if err := flags.Parse(args); err != nil {
@@ -78,6 +79,11 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	deploymentRuns, err := deployment.Resolve(ctx, root, &configuration)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
 
 	var facts []model.CodeFact
 	analysisInput := model.AnalysisInputProviders
@@ -87,7 +93,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		facts, err = provider.LoadFacts(resolveFromRoot(root, *factsFlag), root)
 	} else {
 		if len(configuration.Providers) == 0 {
-			configuration.Providers = builtInProviders(configuration.Deployment)
+			configuration.Providers = builtInProviders(configuration)
 		}
 		var collection provider.Collection
 		collection, err = provider.CollectWithSummary(ctx, root, configuration.Providers)
@@ -108,11 +114,12 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		GeneratedAt:   time.Now().UTC(),
 		Root:          root,
 		Analysis: model.Analysis{
-			Input:           analysisInput,
-			ProviderRuns:    providerRuns,
-			CodeFacts:       len(facts),
-			DeploymentUnits: len(configuration.Deployment.Units),
-			Policies:        len(configuration.Policies),
+			Input:                 analysisInput,
+			ProviderRuns:          providerRuns,
+			CodeFacts:             len(facts),
+			DeploymentAdapterRuns: deploymentRuns,
+			Deployments:           len(configuration.Deployments),
+			Policies:              len(configuration.Policies),
 		},
 		Findings: findings,
 		Summary:  model.Summarize(findings),
@@ -131,10 +138,17 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	return 0
 }
 
-func builtInProviders(deployment config.Deployment) []config.Provider {
+func builtInProviders(configuration config.Config) []config.Provider {
 	roots := make(map[string]struct{})
-	for _, unit := range deployment.Units {
-		root := unit.Source.Root
+	for _, configuredDeployment := range configuration.Deployments {
+		artifact := configuration.Artifacts[configuredDeployment.Artifact]
+		root := artifact.ResolvedSource
+		if root == "" {
+			root = artifact.Source
+			if root == "" {
+				root = "."
+			}
+		}
 		roots[filepath.ToSlash(filepath.Clean(root))] = struct{}{}
 	}
 	sortedRoots := make([]string, 0, len(roots))
@@ -207,13 +221,21 @@ func readReport(path string) (model.Report, error) {
 	if err := decoder.Decode(&report); err != nil {
 		return model.Report{}, err
 	}
-	if report.SchemaVersion != 1 && report.SchemaVersion != model.ReportSchemaVersion {
-		return model.Report{}, fmt.Errorf("schemaVersion must be 1 or %d", model.ReportSchemaVersion)
+	if report.SchemaVersion != 1 && report.SchemaVersion != 2 && report.SchemaVersion != model.ReportSchemaVersion {
+		return model.Report{}, fmt.Errorf("schemaVersion must be 1, 2, or %d", model.ReportSchemaVersion)
 	}
 	if err := ensureEOF(decoder); err != nil {
 		return model.Report{}, err
 	}
 	report.Summary = model.Summarize(report.Findings)
+	if report.Analysis.Deployments == 0 {
+		report.Analysis.Deployments = report.Analysis.DeploymentUnits
+	}
+	for index := range report.Findings {
+		if report.Findings[index].Deployment == "" {
+			report.Findings[index].Deployment = report.Findings[index].DeploymentUnit
+		}
+	}
 	return report, nil
 }
 
@@ -266,23 +288,31 @@ func writeAnalysis(writer io.Writer, label string, analysis model.Analysis) {
 		return
 	}
 	if analysis.Input == model.AnalysisInputFactsFile {
-		fmt.Fprintf(writer, "%s: loaded %d %s from a facts file; %d deployment %s; %d %s.\n",
+		fmt.Fprintf(writer, "%s: loaded %d %s from a facts file; %d %s; %d %s.\n",
 			label,
 			analysis.CodeFacts, plural(analysis.CodeFacts, "code fact", "code facts"),
-			analysis.DeploymentUnits, plural(analysis.DeploymentUnits, "unit", "units"),
+			analysis.Deployments, plural(analysis.Deployments, "deployment", "deployments"),
 			analysis.Policies, plural(analysis.Policies, "policy", "policies"),
 		)
+		writeDeploymentAdapterRuns(writer, analysis.DeploymentAdapterRuns)
 		return
 	}
-	fmt.Fprintf(writer, "%s: %d %s completed; %d %s; %d deployment %s; %d %s.\n",
+	fmt.Fprintf(writer, "%s: %d %s completed; %d %s; %d %s; %d %s.\n",
 		label,
 		len(analysis.ProviderRuns), plural(len(analysis.ProviderRuns), "provider", "providers"),
 		analysis.CodeFacts, plural(analysis.CodeFacts, "code fact", "code facts"),
-		analysis.DeploymentUnits, plural(analysis.DeploymentUnits, "unit", "units"),
+		analysis.Deployments, plural(analysis.Deployments, "deployment", "deployments"),
 		analysis.Policies, plural(analysis.Policies, "policy", "policies"),
 	)
 	for _, run := range analysis.ProviderRuns {
 		fmt.Fprintf(writer, "  %s: %d %s\n", run.Name, run.CodeFacts, plural(run.CodeFacts, "code fact", "code facts"))
+	}
+	writeDeploymentAdapterRuns(writer, analysis.DeploymentAdapterRuns)
+}
+
+func writeDeploymentAdapterRuns(writer io.Writer, runs []model.DeploymentAdapterRun) {
+	for _, run := range runs {
+		fmt.Fprintf(writer, "  %s: deployment adapter %s emitted %d %s\n", run.Deployment, run.Adapter, run.Facts, plural(run.Facts, "fact", "facts"))
 	}
 }
 

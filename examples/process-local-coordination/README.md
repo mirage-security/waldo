@@ -4,7 +4,7 @@ This example isolates the source shape that motivated Waldo's second invariant. 
 and another request consults it as a predicate. The provider-specific Semgrep rule normalizes that syntax to a
 high-confidence `coordination` fact; it does not make a deployment judgment.
 
-The same source and policy are evaluated against two deployment models:
+The same artifact and policy are evaluated against two deployment bindings through the `facts` adapter:
 
 - `replicated.waldo.yaml` declares three concurrently executing instances with instance-scoped memory and produces an
   unresolved error;

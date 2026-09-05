@@ -1,0 +1,9 @@
+version: 1
+resources:
+  expiry-notifier:
+    facts:
+      platform.executionModel: request-scoped-function
+      process.restartable: true
+      deployment.replicas.concurrent: true
+      deployment.replicas.maxConcurrent: 100
+      scheduling.processLocal.durable: false

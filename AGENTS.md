@@ -17,6 +17,7 @@ durable-execution proof uses:
 - standalone source in `examples/durable-deferred-work/app/`;
 - the separate provider in `providers/goast/`;
 - the public process contract in `protocol/`;
+- deployment evidence selected through the `facts` adapter;
 - one shared policy in `policies/durable-deferred-execution.yaml`; and
 - two models in `examples/durable-deferred-work/*.waldo.yaml`.
 
@@ -34,15 +35,19 @@ until a real source example requires a distinct semantic fact or message.
 - `cmd/waldo` and `internal/` own orchestration, configuration, policy joins, dispositions, reporting, and comparison.
   They must remain language- and analyzer-agnostic.
 - `protocol/` owns the public versioned request and code-fact contract. External providers must be able to implement
-  the JSON protocol without importing Waldo internals.
+  the JSON protocol without importing Waldo internals. It also owns the separate versioned deployment-adapter
+  request/result contract.
+- `adapters/` and deployment-adapter commands own deployment-format, platform, and repository topology semantics.
+  Core must not parse Terraform, Kubernetes, Wrangler, or application deployment formats.
 - `providers/` and provider commands own source syntax, runtime semantics, framework behavior, package discovery, and
   dataflow. Core must not import provider packages.
-- Consumers normally configure only deployment topology. Waldo embeds its stable policy catalog and selects packaged
+- Consumers normally bind artifacts to existing deployment evidence. Deployment adapters normalize that evidence;
+  they must not execute deployment tooling implicitly. Waldo embeds its stable policy catalog and selects packaged
   providers by default; explicit policies and providers are advanced full overrides. Built-in providers own generic
   language-fact extraction and backend rule files. Do not require consumers to copy or author Semgrep configuration
   for built-in language semantics.
-- `waldo.yaml` and other deployment models own objective deployment properties. They must not contain
-  programming-language runtime semantics.
+- `waldo.yaml` owns service, artifact, and deployment bindings. Deployment adapters own objective deployment
+  properties. Neither may contain programming-language runtime semantics.
 - `policies/` owns provider-neutral architectural invariants. Policy IDs, matches, messages, and severity are data,
   not hard-coded behavior in core.
 - Technology-specific remediation belongs in integrations, not core findings or policies.
@@ -117,7 +122,7 @@ an architectural boundary or proposing a policy.
 The project uses Go 1.27.1. Format and verify changes with:
 
 ```sh
-gofmt -w cmd internal protocol providers examples policies
+gofmt -w adapters cmd internal protocol providers examples policies
 go test ./...
 go vet ./...
 go build ./cmd/...

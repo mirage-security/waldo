@@ -6,8 +6,7 @@ policies:
     severity: error
     when:
       deployment:
-        process.instances.concurrent:
-          greaterThan: 1
+        deployment.replicas.concurrent: true
         memory.scope: instance
       code:
         kind: coordination

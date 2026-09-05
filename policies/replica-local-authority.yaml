@@ -6,8 +6,7 @@ policies:
     severity: warning
     when:
       deployment:
-        process.replicas:
-          greaterThan: 1
+        deployment.replicas.concurrent: true
         memory.processLocal.authoritative: false
       code:
         kind: state-dependent-decision

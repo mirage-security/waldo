@@ -14,21 +14,13 @@ func TestLoadResolvesSharedPolicyFiles(t *testing.T) {
 	if len(configuration.PolicyFiles) != 1 || len(configuration.Policies) != 1 {
 		t.Fatalf("unexpected shared policies: %#v", configuration)
 	}
+	if !filepath.IsAbs(configuration.BaseDir) {
+		t.Fatalf("configuration base directory is not absolute: %q", configuration.BaseDir)
+	}
 }
 
-func TestDecodeLoadsBuiltInPoliciesForTopologyOnlyModel(t *testing.T) {
-	input := `
-version: 1
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-        entrypoint: worker.ts
-      facts:
-        process.restartable: true
-`
-	configuration, err := Decode(strings.NewReader(input))
+func TestDecodeLoadsBuiltInPoliciesForBindingOnlyModel(t *testing.T) {
+	configuration, err := Decode(strings.NewReader(validModel("")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,43 +40,43 @@ deployment:
 	}
 }
 
-func TestDecodePreservesDeploymentSource(t *testing.T) {
-	input := `
-version: 1
-deployment:
-  units:
-    api-http:
-      source:
-        root: services/api
-        entrypoint: src/http.ts
-      facts: {}
-`
-	configuration, err := Decode(strings.NewReader(input))
+func TestDecodePreservesArtifactAndDeploymentBinding(t *testing.T) {
+	configuration, err := Decode(strings.NewReader(validModel("")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := configuration.Deployment.Units["api-http"].Source
-	if source.Root != "services/api" || source.Entrypoint != "src/http.ts" {
-		t.Fatalf("unexpected deployment source: %#v", source)
+	artifact := configuration.Artifacts["server"]
+	if artifact.Source != "src" || artifact.Entrypoint != "http.ts" {
+		t.Fatalf("unexpected artifact: %#v", artifact)
+	}
+	deployment := configuration.Deployments["production"]
+	if deployment.Artifact != "server" || deployment.From.Adapter != "terraform" || deployment.From.Source != "infra" || deployment.From.Resource != "module.service" {
+		t.Fatalf("unexpected deployment binding: %#v", deployment)
+	}
+	varFiles, ok := deployment.From.With["varFiles"].([]any)
+	if !ok || len(varFiles) != 1 || varFiles[0] != "production.tfvars" {
+		t.Fatalf("unexpected adapter options: %#v", deployment.From.With)
 	}
 }
 
-func TestDecodeRejectsInvalidDeploymentSource(t *testing.T) {
+func TestDecodeRejectsInvalidModel(t *testing.T) {
 	tests := []struct {
-		name       string
-		sourceYAML string
-		want       string
+		name  string
+		input string
+		want  string
 	}{
-		{name: "missing root", sourceYAML: "{}", want: "source.root"},
-		{name: "absolute root", sourceYAML: "{root: /services/api}", want: "source.root"},
-		{name: "escaping root", sourceYAML: "{root: ../api}", want: "source.root"},
-		{name: "absolute entrypoint", sourceYAML: "{root: services/api, entrypoint: /src/http.ts}", want: "source.entrypoint"},
-		{name: "escaping entrypoint", sourceYAML: "{root: services/api, entrypoint: ../worker.ts}", want: "source.entrypoint"},
+		{name: "old schema", input: strings.Replace(validModel(""), "version: 2", "version: 1", 1), want: "version must be 2"},
+		{name: "missing service", input: strings.Replace(validModel(""), "service: reporting", "service: ''", 1), want: "service cannot be empty"},
+		{name: "absolute artifact source", input: strings.Replace(validModel(""), "source: src", "source: /src", 1), want: "must be relative to waldo.yaml"},
+		{name: "absolute entrypoint", input: strings.Replace(validModel(""), "entrypoint: http.ts", "entrypoint: /http.ts", 1), want: "must be relative to its source"},
+		{name: "unknown artifact", input: strings.Replace(validModel(""), "artifact: server", "artifact: missing", 1), want: "references unknown artifact"},
+		{name: "missing adapter", input: strings.Replace(validModel(""), "adapter: terraform", "adapter: ''", 1), want: "from.adapter"},
+		{name: "absolute deployment source", input: strings.Replace(validModel(""), "source: infra", "source: /infra", 1), want: "from.source"},
+		{name: "missing resource", input: strings.Replace(validModel(""), "resource: module.service", "resource: ''", 1), want: "from.resource"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			input := "version: 1\ndeployment:\n  units:\n    worker:\n      source: " + test.sourceYAML + "\n      facts: {}\n"
-			_, err := Decode(strings.NewReader(input))
+			_, err := Decode(strings.NewReader(test.input))
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("expected %q validation error, got %v", test.want, err)
 			}
@@ -93,15 +85,7 @@ func TestDecodeRejectsInvalidDeploymentSource(t *testing.T) {
 }
 
 func TestDecodeExplicitPoliciesOverrideBuiltIns(t *testing.T) {
-	input := `
-version: 1
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-      facts: {}
-policies:
+	extra := `policies:
   - id: example
     title: Example
     severity: info
@@ -111,7 +95,7 @@ policies:
         kind: example
     message: Example.
 `
-	configuration, err := Decode(strings.NewReader(input))
+	configuration, err := Decode(strings.NewReader(validModel(extra)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,56 +105,39 @@ policies:
 }
 
 func TestDecodeRejectsUnknownFields(t *testing.T) {
-	input := `
-version: 1
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-      facts: {}
-policies:
-  - id: example
-    title: Example
-    severity: info
-    when:
-      deployment: {}
-      code:
-        kind: example
-    message: Example.
-surprise: true
-`
-	_, err := Decode(strings.NewReader(input))
+	_, err := Decode(strings.NewReader(validModel("surprise: true\n")))
 	if err == nil || !strings.Contains(err.Error(), "field surprise not found") {
 		t.Fatalf("expected unknown-field error, got %v", err)
 	}
 }
 
 func TestDispositionRequiresReason(t *testing.T) {
-	input := `
-version: 1
-deployment:
-  units:
-    worker:
-      source:
-        root: src
-      facts: {}
-policies:
-  - id: example
-    title: Example
-    severity: info
-    when:
-      deployment: {}
-      code:
-        kind: example
-    message: Example.
-dispositions:
-  - finding: waldo:v1:0000000000000000000000000000000000000000000000000000000000000000
+	extra := `dispositions:
+  - finding: waldo:v2:0000000000000000000000000000000000000000000000000000000000000000
     disposition: accepted
     reason: ""
 `
-	_, err := Decode(strings.NewReader(input))
+	_, err := Decode(strings.NewReader(validModel(extra)))
 	if err == nil || !strings.Contains(err.Error(), "must include a reason") {
 		t.Fatalf("expected reason validation error, got %v", err)
 	}
+}
+
+func validModel(extra string) string {
+	return `version: 2
+service: reporting
+artifacts:
+  server:
+    source: src
+    entrypoint: http.ts
+deployments:
+  production:
+    artifact: server
+    from:
+      adapter: terraform
+      source: infra
+      resource: module.service
+      with:
+        varFiles: [production.tfvars]
+` + extra
 }

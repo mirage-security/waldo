@@ -1,20 +1,20 @@
 # Waldo
 
-Waldo catches code whose architectural guarantees do not hold in the way that code is deployed.
-
-It combines facts from source analyzers with objective deployment facts. Waldo is not a general-purpose linter: a
-core rule belongs here only when its conclusion requires both sides.
+Waldo catches code whose architectural guarantees do not hold when that code is deployed.
 
 ```text
 deployment facts + code facts + architectural policy + human disposition -> findings
 ```
 
+A local timer can disappear with its process. A process-local lock cannot coordinate independently running copies.
+Source linters see the APIs but not the topology; infrastructure checks see the topology but not what the code is
+trying to guarantee. Waldo evaluates the combination.
+
 ## Why Waldo?
 
-Code can be correct in one process and wrong once that process restarts or multiple copies run. A local timer can
-disappear before its callback runs; a counter can lose updates across replicas. A source linter sees the APIs but not
-the deployment, while an infrastructure check sees the topology but not what the code is trying to guarantee. Waldo
-evaluates the mismatch.
+Code can be correct in one execution model and wrong in another. Waldo's core rule for admitting a policy is therefore
+strict: its conclusion must require both a code fact and a deployment fact. Checks that do not need deployment context
+belong in ordinary analyzers instead.
 
 The project grew from [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
 Its name refers to Waldo et al.'s [*A Note on Distributed Computing*](https://waldo.scholars.harvard.edu/publications/note-distributed-computing):
@@ -22,56 +22,58 @@ local and distributed systems can share interfaces, but they cannot be assumed t
 
 ## Quick start
 
-Waldo currently requires Go 1.27.1. JavaScript and TypeScript analysis uses local, token-free Semgrep CE as an internal
-backend.
+Waldo requires Go 1.27.1. Install the CLI, its JavaScript provider, and the static Terraform deployment adapter:
 
 ```sh
 go install github.com/mirage-security/waldo/cmd/waldo@latest
 go install github.com/mirage-security/waldo/cmd/waldo-javascript-provider@latest
+go install github.com/mirage-security/waldo/cmd/waldo-terraform-deployment-adapter@latest
 ```
 
-Install [Semgrep](https://semgrep.dev/docs/getting-started/quickstart) and make sure all three commands are on `PATH`.
+JavaScript and TypeScript analysis currently uses local, token-free Semgrep CE as an internal backend. Install
+[Semgrep](https://semgrep.dev/docs/getting-started/quickstart) and make sure the commands above are on `PATH`.
 Consumers run Waldo, not Semgrep directly.
 
-Add `waldo.yaml` at the repository root:
+Place `waldo.yaml` beside the service source:
 
 ```yaml
-version: 1
+version: 2
+service: reporting
 
-deployment:
-  units:
-    reporting:
-      source:
-        root: services/reporting
-        entrypoint: src/index.ts
-      facts:
-        process.restartable: true
-        process.replicas: 2
-        process.instances.concurrent: 2
-        memory.scope: instance
-        scheduling.processLocal.durable: false
+artifacts:
+  server:
+    entrypoint: src/index.ts
+
+deployments:
+  production:
+    artifact: server
+    from:
+      adapter: terraform
+      source: infra
+      resource: module.service
+      with:
+        varFiles:
+          - production.tfvars
 ```
 
-Then run:
+Then run from the repository root:
 
 ```sh
-waldo check
+waldo check --config services/reporting/waldo.yaml
 ```
 
-Waldo automatically loads its built-in policies and selects its packaged provider. `source.root` identifies the
-project that produces the deployment unit; `source.entrypoint` distinguishes separately deployed executables from the
-same project. Consumers do not copy policy files or maintain Semgrep rules for built-in language semantics.
+This file does not repeat Terraform's topology. It binds the `server` artifact to the existing deployment resource:
 
-Example output:
+- `adapter` says how Waldo reads the deployment evidence;
+- `source` locates that evidence relative to `waldo.yaml`; and
+- `resource` selects the deployable object inside it.
 
-```text
-Analysis: 1 provider completed; 1 code fact; 1 deployment unit; 4 policies.
-  javascript: 1 code fact
-WARNING non-durable-deferred-execution This deferred work may never run if the process stops or restarts first. services/reporting/src/jobs.ts:42 [unresolved]
-  waldo:v1:...
+The artifact source defaults to the directory containing `waldo.yaml`. Add `source` to an artifact only when its code
+lives in a child directory. Deployment adapters inspect existing files but never execute deployment tools, initialize
+providers, read state, contact backends, or access cloud APIs.
 
-1 findings: 1 unresolved, 0 accepted, 0 false-positive; 0 failing
-```
+Waldo loads its built-in policies and source providers automatically. Explicit policies and providers are advanced
+full overrides for focused proofs and custom integrations.
 
 ## Findings and CI
 
@@ -80,51 +82,61 @@ Severity and disposition are independent:
 - Severity: `error | warning | info`
 - Disposition: `unresolved | accepted | false-positive`
 
-`waldo check` exits `1` only when an unresolved error exists. Warnings remain visible without failing CI. Accepted and
-false-positive findings remain in reports as evidence. Configuration, provider, and input failures exit `2`.
-
-Write a machine-readable report with:
+`waldo check` exits `1` only for an unresolved error. Warnings remain visible without failing CI. Accepted and
+false-positive findings remain in reports as evidence. Configuration, adapter, provider, and input failures exit `2`.
 
 ```sh
-waldo check --json > waldo.report.json
-```
-
-Compare a pull request with its base revision using complete reports:
-
-```sh
+waldo check --config services/reporting/waldo.yaml --json > waldo.report.json
 waldo compare --base base.report.json --head head.report.json
 ```
 
 Comparison separates introduced, resolved, changed, and unchanged findings. Only newly failing findings fail the
-comparison.
+comparison. Reports record completed deployment adapters, completed source providers, and their normalized fact
+counts, making an unexpected zero-result scan inspectable.
 
-Every report records completed providers and normalized fact counts. A zero-finding result is therefore inspectable,
-but it is not proof that the codebase has no architectural violations. Calibrate corpus scans with a known positive
-and a deployment counterfactual; see [Foundation proofs](docs/foundation-proofs.md).
+## Adapters and providers
 
-## How it works
+The same binding contract supports additional static deployment adapters. For example, a Kubernetes adapter can use:
 
-- Deployment units declare a source root, an optional executable entrypoint, and objective properties such as
-  restartability, concurrency, memory scope, and durability.
-- Replaceable providers translate language and framework behavior into analyzer-neutral code facts.
-- Provider-neutral policies join code facts with deployment facts.
-- Human dispositions annotate one stable finding without changing facts or policy behavior.
+```yaml
+from:
+  adapter: kubernetes
+  source: deploy/rendered/production.yaml
+  resource: Deployment/reporting
+```
 
-The normal setup is topology-only. Explicit providers and policy files are supported for custom integrations and
-focused experiments; they replace the built-in selection rather than extending it.
+Kubernetes support is not implemented yet; the example shows that adding it does not change the public binding
+vocabulary or core policies.
+
+External adapters use the same binding shape:
+
+```yaml
+from:
+  adapter: ../../tools/waldo-mirage-deployment-adapter
+  source: .
+  resource: production
+```
+
+The external adapter can combine repository-specific conventions and files such as `deploy.json` without teaching
+Waldo core about them. The built-in `facts` adapter reads already-normalized deployment evidence and exists as an
+explicit escape hatch and executable test fixture—not as the normal consumer format.
+
+Code providers separately translate source syntax, runtime behavior, and framework semantics into code facts. Core
+policies know neither deployment products nor programming-language APIs.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Deployment adapter protocol](docs/deployment-adapter-protocol.md)
 - [Foundation proofs](docs/foundation-proofs.md)
-- [Provider protocol](docs/provider-protocol.md)
+- [Code-fact provider protocol](docs/provider-protocol.md)
 - [Policy taxonomy](docs/policy-taxonomy.md)
 - [Contribution and rule-admission guide](CONTRIBUTING.md)
 
 ## Development
 
 ```sh
-gofmt -w cmd internal protocol providers examples
+gofmt -w adapters cmd internal protocol providers examples policies
 go test ./...
 go vet ./...
 go build ./cmd/...

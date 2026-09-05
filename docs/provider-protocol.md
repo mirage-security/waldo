@@ -46,8 +46,8 @@ many normalized facts it emitted, but it cannot infer how many source files a pr
 Consumers must calibrate a zero-fact run with a known positive. A future protocol revision may add coverage telemetry
 only after multiple providers can express it without leaking backend-specific output into core.
 
-Protocol v1 also does not carry deployment entrypoints or provider-produced reachability. Waldo invokes built-in
-providers once per distinct `source.root` and conservatively joins a fact to every deployment unit whose root contains
-the fact's path. `source.entrypoint` records separate executables in the deployment model, but distinguishing which
-same-root executable can reach a fact requires a future provider-backed protocol extension. That extension must carry
-an analyzer-neutral reachability relation; it must not teach core how a particular language resolves imports.
+Protocol v1 also does not carry artifact entrypoints or provider-produced reachability. Waldo invokes built-in
+providers once per distinct artifact source and conservatively joins a fact to every deployment whose artifact source
+contains the fact's path. An artifact entrypoint records separate executables, but distinguishing which same-source
+executable can reach a fact requires a future provider-backed protocol extension. That extension must carry an
+analyzer-neutral reachability relation; it must not teach core how a particular language resolves imports.

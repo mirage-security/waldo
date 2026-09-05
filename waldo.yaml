@@ -1,17 +1,16 @@
-version: 1
+version: 2
+service: waldo
 
-deployment:
-  units:
-    application:
-      source:
-        root: .
-        entrypoint: cmd/waldo/main.go
-      facts:
-        process.restartable: true
-        process.replicas: 1
-        process.instances.concurrent: 1
-        memory.scope: instance
-        scheduling.processLocal.durable: false
-        memory.processLocal.authoritative: false
+artifacts:
+  cli:
+    entrypoint: cmd/waldo/main.go
+
+deployments:
+  application:
+    artifact: cli
+    from:
+      adapter: facts
+      source: testdata/deployment/local.yaml
+      resource: application
 
 dispositions: []

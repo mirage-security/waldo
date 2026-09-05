@@ -1,7 +1,7 @@
 # Foundation proofs
 
-Waldo currently claims two source-backed invariant families. These examples demonstrate the provider boundary,
-deployment join, policy result, and required counterfactuals. They are design evidence rather than consumer setup.
+Waldo currently claims two source-backed invariant families. These examples demonstrate both process boundaries,
+the deployment join, policy result, and required counterfactuals. They are design evidence rather than consumer setup.
 
 ## Durable deferred execution
 
@@ -10,7 +10,9 @@ separate [Go AST provider](../providers/goast/README.md) reports both as process
 only the explicitly declared expiry notification as correctness-critical. The best-effort telemetry timer remains a
 code fact without becoming a finding.
 
-The same [policy](../policies/durable-deferred-execution.yaml) evaluates that source against two deployment models:
+The same [policy](../policies/durable-deferred-execution.yaml) evaluates that source against two deployment bindings.
+Each binding uses the normalized `facts` adapter to select separate deployment evidence; the code artifact and policy
+remain unchanged.
 
 | Input | Container service | Function runtime |
 | --- | --- | --- |
@@ -33,7 +35,8 @@ go run ./cmd/waldo check \
   --config examples/durable-deferred-work/function.waldo.yaml
 ```
 
-Both intentionally exit `1` and produce the same stable finding identity. The executable proof preserves that claim:
+Both intentionally exit `1` and produce the same stable `service/deployment` finding identity. The executable proof
+also verifies that both deployment adapters completed and preserves that claim:
 
 ```sh
 go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
@@ -56,8 +59,8 @@ go run ./cmd/waldo check \
 ```
 
 The replicated model intentionally exits `1` with `process-local-coordination`. The single-instance model exits `0`
-with no finding. Both report that the same provider completed and emitted the same one code fact, proving that the
-zero result comes from the deployment counterfactual rather than silent analysis.
+with no finding. Both report that the deployment adapter and the same code provider completed, proving that the zero
+result comes from the deployment counterfactual rather than silent analysis.
 
 This proof requires Semgrep on `PATH`. The adapter translates only rules carrying explicit `metadata.waldo`; ordinary
 lint and security results are ignored.
@@ -73,8 +76,8 @@ For each corpus experiment:
 1. Run a known positive through the same provider binary, policies, targets, and deployment model.
 2. Remove the code premise and confirm the finding disappears.
 3. Restore the code premise, remove the deployment premise, and confirm the finding disappears.
-4. Inspect provider completion and fact counts in both reports.
+4. Inspect deployment-adapter and provider completion and fact counts in both reports.
 5. Manually review the relevant code or pull-request diff for assumptions the provider may have missed.
 
-Report schema v2 records provider completion and fact counts, not parsed-file coverage. Protocol v1 does not expose
-backend-specific discovery or skip telemetry.
+Report schema v3 records deployment-adapter and provider completion and fact counts, not parsed-file coverage.
+Protocol v1 does not expose backend-specific discovery or skip telemetry.
