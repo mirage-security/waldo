@@ -36,6 +36,18 @@ func TestReportsRecordsResolvedFindings(t *testing.T) {
 	}
 }
 
+func TestReportsRecordsMatchedCodeEvidenceChanges(t *testing.T) {
+	baseFinding := finding("same", model.SeverityWarning, model.DispositionUnresolved)
+	baseFinding.MatchedCode = map[string]any{"state.role": "unknown"}
+	headFinding := baseFinding
+	headFinding.MatchedCode = map[string]any{"state.role": "authority"}
+
+	result := Reports(report(baseFinding), report(headFinding))
+	if len(result.Changed) != 1 || result.Unchanged != 0 {
+		t.Fatalf("matched code evidence change was not recorded: %#v", result)
+	}
+}
+
 func finding(id string, severity model.Severity, disposition model.Disposition) model.Finding {
 	return model.Finding{ID: id, Severity: severity, Disposition: disposition}
 }

@@ -15,12 +15,31 @@ func TestRunProviderBoundary(t *testing.T) {
 		Name:    "test-provider",
 		Command: []string{os.Args[0], "-test.run=TestProviderHelper", "--", "emit"},
 	}
-	facts, err := run(context.Background(), t.TempDir(), configured)
+	result, err := run(context.Background(), t.TempDir(), configured)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(facts) != 1 || facts[0].Provider != "test-provider" || facts[0].ID != "structural:one" {
-		t.Fatalf("unexpected facts: %#v", facts)
+	if len(result.Facts) != 1 || result.Facts[0].Provider != "test-provider" || result.Facts[0].ID != "structural:one" {
+		t.Fatalf("unexpected facts: %#v", result.Facts)
+	}
+}
+
+func TestCollectRetainsProtocolV2PartialCoverage(t *testing.T) {
+	configured := config.Provider{
+		Name:            "partial-provider",
+		Command:         []string{os.Args[0], "-test.run=TestProviderHelper", "--", "partial"},
+		ProtocolVersion: 2,
+	}
+	collection, err := Collect(context.Background(), t.TempDir(), []config.Provider{configured})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(collection.Facts) != 1 || collection.Facts[0].ID != "structural:partial" {
+		t.Fatalf("unexpected facts: %#v", collection.Facts)
+	}
+	if len(collection.Runs) != 1 || collection.Runs[0].Coverage != "partial" ||
+		collection.Runs[0].FilesAttempted != 10 || collection.Runs[0].FilesNotFullyAnalyzed != 2 {
+		t.Fatalf("unexpected provider accounting: %#v", collection.Runs)
 	}
 }
 
@@ -61,6 +80,13 @@ func TestDecodeFactsRejectsDuplicateProviderIdentity(t *testing.T) {
 	}
 }
 
+func TestDecodeProviderRecordsRequiresFinalSummary(t *testing.T) {
+	input := strings.NewReader(`{"type":"fact","fact":{"id":"one","kind":"example","source":{"path":"src/a"}}}`)
+	if _, err := DecodeProviderRecords(input, "test"); err == nil || !strings.Contains(err.Error(), "missing its summary") {
+		t.Fatalf("expected missing summary error, got %v", err)
+	}
+}
+
 func TestProviderHelper(t *testing.T) {
 	for index, argument := range os.Args {
 		if argument != "--" || index+1 >= len(os.Args) {
@@ -71,6 +97,10 @@ func TestProviderHelper(t *testing.T) {
 			fmt.Println(`{"id":"structural:one","kind":"example","source":{"path":"src/example"}}`)
 			os.Exit(0)
 		case "empty":
+			os.Exit(0)
+		case "partial":
+			fmt.Println(`{"type":"fact","fact":{"id":"structural:partial","kind":"example","source":{"path":"src/example"}}}`)
+			fmt.Println(`{"type":"summary","summary":{"coverage":"partial","filesAttempted":10,"filesNotFullyAnalyzed":2}}`)
 			os.Exit(0)
 		}
 	}

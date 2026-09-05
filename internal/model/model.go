@@ -13,9 +13,9 @@ const (
 	// PolicySchemaVersion is the shared policy-document schema.
 	PolicySchemaVersion = 1
 	// ReportSchemaVersion is independent from the provider protocol and
-	// configuration schemas. Version 3 names deployments directly and records
-	// deployment-adapter accounting.
-	ReportSchemaVersion = 3
+	// configuration schemas. Version 4 records provider coverage and both
+	// matched sides of each policy join.
+	ReportSchemaVersion = 4
 
 	AnalysisInputProviders = "providers"
 	AnalysisInputFactsFile = "facts-file"
@@ -56,6 +56,7 @@ type Finding struct {
 	// comparison. New reports leave it empty.
 	DeploymentUnit    string         `json:"deploymentUnit,omitempty"`
 	MatchedDeployment map[string]any `json:"matchedDeploymentFacts"`
+	MatchedCode       map[string]any `json:"matchedCodeFacts"`
 	CodeFact          CodeFact       `json:"codeFact"`
 	Message           string         `json:"message"`
 }
@@ -76,8 +77,11 @@ type Summary struct {
 }
 
 type ProviderRun struct {
-	Name      string `json:"name"`
-	CodeFacts int    `json:"codeFacts"`
+	Name                  string                          `json:"name"`
+	CodeFacts             int                             `json:"codeFacts"`
+	Coverage              protocol.ProviderCoverageStatus `json:"coverage,omitempty"`
+	FilesAttempted        int                             `json:"filesAttempted,omitempty"`
+	FilesNotFullyAnalyzed int                             `json:"filesNotFullyAnalyzed,omitempty"`
 }
 
 type DeploymentAdapterRun struct {

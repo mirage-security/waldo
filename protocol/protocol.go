@@ -4,6 +4,10 @@ package protocol
 
 const Version = 1
 
+// ProviderProtocolVersion is the current code-provider protocol. Version 1
+// remains supported for facts-only external providers.
+const ProviderProtocolVersion = 2
+
 const DeploymentAdapterVersion = 1
 
 // Request is written as one JSON object to a provider's standard input.
@@ -27,6 +31,42 @@ type CodeFact struct {
 	Source     SourceLocation `json:"source"`
 	Symbol     string         `json:"symbol,omitempty"`
 	Attributes map[string]any `json:"attributes,omitempty"`
+}
+
+type ProviderCoverageStatus string
+
+const (
+	ProviderCoverageComplete ProviderCoverageStatus = "complete"
+	ProviderCoveragePartial  ProviderCoverageStatus = "partial"
+)
+
+func (status ProviderCoverageStatus) Valid() bool {
+	return status == ProviderCoverageComplete || status == ProviderCoveragePartial
+}
+
+// ProviderSummary closes a protocol-v2 stream and makes incomplete analysis
+// distinguishable from a complete zero-fact run.
+type ProviderSummary struct {
+	Coverage              ProviderCoverageStatus `json:"coverage"`
+	FilesAttempted        int                    `json:"filesAttempted,omitempty"`
+	FilesNotFullyAnalyzed int                    `json:"filesNotFullyAnalyzed,omitempty"`
+}
+
+const (
+	ProviderRecordFact    = "fact"
+	ProviderRecordSummary = "summary"
+)
+
+// ProviderRecord is one JSONL record in a protocol-v2 provider stream.
+type ProviderRecord struct {
+	Type    string           `json:"type"`
+	Fact    *CodeFact        `json:"fact,omitempty"`
+	Summary *ProviderSummary `json:"summary,omitempty"`
+}
+
+type ProviderResult struct {
+	Facts   []CodeFact
+	Summary ProviderSummary
 }
 
 // DeploymentRequest is written as one JSON object to a deployment adapter.

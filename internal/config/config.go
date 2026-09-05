@@ -12,6 +12,7 @@ import (
 
 	"github.com/mirage-security/waldo/internal/model"
 	builtinpolicies "github.com/mirage-security/waldo/policies"
+	"github.com/mirage-security/waldo/protocol"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,8 +53,9 @@ type DeploymentReference struct {
 }
 
 type Provider struct {
-	Name    string   `yaml:"name"`
-	Command []string `yaml:"command"`
+	Name            string   `yaml:"name"`
+	Command         []string `yaml:"command"`
+	ProtocolVersion int      `yaml:"protocolVersion,omitempty"`
 }
 
 type Policy struct {
@@ -277,6 +279,9 @@ func (c Config) Validate() error {
 		providerNames[provider.Name] = struct{}{}
 		if len(provider.Command) == 0 || provider.Command[0] == "" {
 			return fmt.Errorf("provider %q must declare a command", provider.Name)
+		}
+		if provider.ProtocolVersion != 0 && provider.ProtocolVersion != protocol.Version && provider.ProtocolVersion != protocol.ProviderProtocolVersion {
+			return fmt.Errorf("provider %q protocolVersion must be %d or %d", provider.Name, protocol.Version, protocol.ProviderProtocolVersion)
 		}
 	}
 

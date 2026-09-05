@@ -37,11 +37,17 @@ With a topology-only `waldo.yaml`, Waldo selects this provider automatically and
 artifact source values. Repeated sources are scanned once. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript
 files are excluded by default.
 
+The automatic provider uses protocol v2. Warning-level Semgrep parse gaps produce `coverage: partial` with attempted
+and not-fully-analyzed file counts while retaining facts from successfully analyzed source. Other Semgrep errors still
+fail the provider. Waldo exits `2` for partial coverage unless the research workflow explicitly uses
+`--allow-partial`; a partial zero is never presented as a clean scan.
+
 An explicit provider entry is an advanced full override. For example:
 
 ```yaml
 providers:
   - name: javascript
+    protocolVersion: 2
     command:
       - waldo-javascript-provider
       - --target

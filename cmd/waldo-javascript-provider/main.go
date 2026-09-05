@@ -54,8 +54,8 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
 
-	return providercmd.Run(input, output, func(request protocol.Request) ([]protocol.CodeFact, error) {
-		return javascriptprovider.Analyze(ctx, request.Root, javascriptprovider.Options{
+	return providercmd.RunVersioned(input, output, func(request protocol.Request) (protocol.ProviderResult, error) {
+		return javascriptprovider.AnalyzeDetailed(ctx, request.Root, javascriptprovider.Options{
 			SemgrepExecutable: executable,
 			Targets:           targets,
 			Excludes:          effectiveExcludes(excludes),

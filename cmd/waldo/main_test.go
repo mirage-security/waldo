@@ -38,6 +38,36 @@ func TestCheckJSONAndExitPolicy(t *testing.T) {
 	if report.SchemaVersion != model.ReportSchemaVersion || report.Analysis.Input != model.AnalysisInputFactsFile || report.Analysis.CodeFacts != 1 || len(report.Analysis.DeploymentAdapterRuns) != 1 {
 		t.Fatalf("unexpected analysis accounting: %#v", report.Analysis)
 	}
+	if report.Findings[0].MatchedCode["correctness.critical"] != true || report.Findings[0].MatchedDeployment["process.restartable"] != true {
+		t.Fatalf("report does not preserve both sides of the policy join: %#v", report.Findings[0])
+	}
+}
+
+func TestCheckHumanReportExplainsPolicyJoin(t *testing.T) {
+	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{
+		"check",
+		"--root", repositoryRoot,
+		"--config", "testdata/waldo.yaml",
+		"--facts", "testdata/scenarios/durable-positive/facts.jsonl",
+	}, &stdout, &stderr)
+	if exitCode != 1 {
+		t.Fatalf("got exit %d, want 1; stderr: %s", exitCode, stderr.String())
+	}
+	report := stdout.String()
+	for _, expected := range []string{
+		"code evidence (fixture deferred-execution",
+		"correctness.critical=true",
+		"execution.authority=\"process-local\"",
+		"deployment evidence (fixture/worker)",
+		"process.restartable=true",
+		"scheduling.processLocal.durable=false",
+	} {
+		if !strings.Contains(report, expected) {
+			t.Fatalf("human report is missing %q:\n%s", expected, report)
+		}
+	}
 }
 
 func TestCheckMakesZeroFindingsAuditable(t *testing.T) {
@@ -100,9 +130,69 @@ providers:
 	}
 }
 
+func TestCheckRequiresExplicitAllowanceForPartialCoverage(t *testing.T) {
+	root := t.TempDir()
+	executable, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := fmt.Sprintf(`version: 2
+service: partial
+artifacts:
+  worker:
+    entrypoint: worker.ts
+deployments:
+  worker:
+    artifact: worker
+    from:
+      adapter: facts
+      source: deployment.yaml
+      resource: worker
+providers:
+  - name: partial-provider
+    protocolVersion: 2
+    command: [%q, -test.run=TestEmptyProviderHelper, --, partial]
+`, executable)
+	if err := os.WriteFile(filepath.Join(root, "deployment.yaml"), []byte("version: 1\nresources:\n  worker:\n    facts:\n      process.restartable: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "waldo.yaml"), []byte(configuration), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{"check", "--root", root, "--json"}, &stdout, &stderr)
+	if exitCode != 2 || !strings.Contains(stderr.String(), "--allow-partial") {
+		t.Fatalf("got exit %d and stderr %q", exitCode, stderr.String())
+	}
+	var report model.Report
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Analysis.ProviderRuns) != 1 || report.Analysis.ProviderRuns[0].Coverage != "partial" ||
+		report.Analysis.ProviderRuns[0].FilesAttempted != 10 || report.Analysis.ProviderRuns[0].FilesNotFullyAnalyzed != 2 {
+		t.Fatalf("partial coverage missing from report: %#v", report.Analysis.ProviderRuns)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = run(context.Background(), []string{"check", "--root", root, "--json", "--allow-partial"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("got exit %d, want 0; stderr: %s", exitCode, stderr.String())
+	}
+}
+
 func TestEmptyProviderHelper(t *testing.T) {
 	for index, argument := range os.Args {
-		if argument == "--" && index+1 < len(os.Args) && os.Args[index+1] == "empty" {
+		if argument != "--" || index+1 >= len(os.Args) {
+			continue
+		}
+		switch os.Args[index+1] {
+		case "empty":
+			os.Exit(0)
+		case "partial":
+			fmt.Println(`{"type":"fact","fact":{"id":"partial:one","kind":"example","source":{"path":"worker.ts"}}}`)
+			fmt.Println(`{"type":"summary","summary":{"coverage":"partial","filesAttempted":10,"filesNotFullyAnalyzed":2}}`)
 			os.Exit(0)
 		}
 	}
@@ -169,7 +259,7 @@ func TestBuiltInProviderTargetsDistinctArtifactSourceRoots(t *testing.T) {
 		"--target", "services/api",
 		"--target", "services/reporting",
 	}
-	if len(providers) != 1 || providers[0].Name != "javascript" || !reflect.DeepEqual(providers[0].Command, want) {
+	if len(providers) != 1 || providers[0].Name != "javascript" || providers[0].ProtocolVersion != 2 || !reflect.DeepEqual(providers[0].Command, want) {
 		t.Fatalf("unexpected built-in providers: %#v", providers)
 	}
 }

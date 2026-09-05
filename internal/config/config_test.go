@@ -84,6 +84,7 @@ func TestDecodeRejectsInvalidModel(t *testing.T) {
 		{name: "missing adapter", input: strings.Replace(validModel(""), "adapter: terraform", "adapter: ''", 1), want: "from.adapter"},
 		{name: "absolute deployment source", input: strings.Replace(validModel(""), "source: infra", "source: /infra", 1), want: "from.source"},
 		{name: "missing resource", input: strings.Replace(validModel(""), "resource: module.service", "resource: ''", 1), want: "from.resource"},
+		{name: "invalid provider protocol", input: validModel("providers:\n  - name: custom\n    command: [custom-provider]\n    protocolVersion: 99\n"), want: "protocolVersion must be 1 or 2"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
