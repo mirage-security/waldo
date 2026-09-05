@@ -8,25 +8,24 @@ deployment facts + code facts + architectural policy + human disposition -> find
 
 ## Why use Waldo?
 
-A source analyzer can recognize a local timer or lock, but it does not usually know whether the process can be replaced
-or how many copies may run. An infrastructure check can see that deployment topology, but it does not know whether the
-timer schedules required work or the lock protects deployment-wide state. Waldo joins those two kinds of evidence.
+A source tool can find a local timer or lock. It usually does not know whether the process can be replaced or how many
+copies may run. An infrastructure tool knows how the code is deployed, but not whether the timer schedules required
+work or the lock protects shared state. Waldo checks both.
 
-That scope is intentionally narrow. A core Waldo policy must require both a code fact and a deployment fact. Checks
-that need only one side belong in an ordinary source analyzer or infrastructure validator.
+Waldo's scope is narrow. A core policy must require both a code fact and a deployment fact. A check that needs only one
+belongs in a source or infrastructure tool.
 
 ### Can't I check this another way?
 
-A project can write source checks, inspect its deployment configuration, and maintain the code that joins their
-results. Waldo packages that workflow with a shared fact contract, policies, stable finding identities, dispositions,
-and base/head comparison. It complements source linters, security scanners, and infrastructure validation rather than
-replacing them.
+You can build this yourself: run source checks, read the deployment configuration, and join the results. Waldo provides
+that workflow, along with stable findings, accepted exceptions, and base/head comparison. It works alongside source
+linters, security scanners, and infrastructure checks.
 
 ### The name
 
-The name is a nod to Waldo et al.'s
+Waldo is named after Waldo et al.'s
 [*A Note on Distributed Computing*](https://waldo.scholars.harvard.edu/publications/note-distributed-computing).
-The project grew from [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
+It started with [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
 
 ## Quick start
 
