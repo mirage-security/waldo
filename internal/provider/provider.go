@@ -17,16 +17,31 @@ import (
 	"github.com/mirage-security/waldo/protocol"
 )
 
+type Collection struct {
+	Facts []model.CodeFact
+	Runs  []model.ProviderRun
+}
+
 func Collect(ctx context.Context, root string, providers []config.Provider) ([]model.CodeFact, error) {
+	collection, err := CollectWithSummary(ctx, root, providers)
+	if err != nil {
+		return nil, err
+	}
+	return collection.Facts, nil
+}
+
+func CollectWithSummary(ctx context.Context, root string, providers []config.Provider) (Collection, error) {
 	var facts []model.CodeFact
+	runs := make([]model.ProviderRun, 0, len(providers))
 	for _, configured := range providers {
 		providerFacts, err := run(ctx, root, configured)
 		if err != nil {
-			return nil, err
+			return Collection{}, err
 		}
 		facts = append(facts, providerFacts...)
+		runs = append(runs, model.ProviderRun{Name: configured.Name, CodeFacts: len(providerFacts)})
 	}
-	return facts, nil
+	return Collection{Facts: facts, Runs: runs}, nil
 }
 
 func run(ctx context.Context, root string, provider config.Provider) ([]model.CodeFact, error) {

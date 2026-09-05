@@ -16,6 +16,8 @@ type Result struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	BaseSummary   model.Summary   `json:"baseSummary"`
 	HeadSummary   model.Summary   `json:"headSummary"`
+	BaseAnalysis  model.Analysis  `json:"baseAnalysis"`
+	HeadAnalysis  model.Analysis  `json:"headAnalysis"`
 	Introduced    []model.Finding `json:"introduced"`
 	Resolved      []model.Finding `json:"resolved"`
 	Changed       []FindingChange `json:"changed"`
@@ -25,9 +27,11 @@ type Result struct {
 
 func Reports(base, head model.Report) Result {
 	result := Result{
-		SchemaVersion: model.SchemaVersion,
+		SchemaVersion: model.ReportSchemaVersion,
 		BaseSummary:   base.Summary,
 		HeadSummary:   head.Summary,
+		BaseAnalysis:  base.Analysis,
+		HeadAnalysis:  head.Analysis,
 		Introduced:    make([]model.Finding, 0),
 		Resolved:      make([]model.Finding, 0),
 		Changed:       make([]FindingChange, 0),

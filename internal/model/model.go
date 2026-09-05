@@ -6,7 +6,16 @@ import (
 	"github.com/mirage-security/waldo/protocol"
 )
 
-const SchemaVersion = protocol.Version
+const (
+	// SchemaVersion is the deployment-model and policy-document schema.
+	SchemaVersion = protocol.Version
+	// ReportSchemaVersion is independent from the provider protocol and
+	// configuration schemas. Version 2 adds analysis accounting.
+	ReportSchemaVersion = 2
+
+	AnalysisInputProviders = "providers"
+	AnalysisInputFactsFile = "facts-file"
+)
 
 type Severity string
 
@@ -63,10 +72,24 @@ type Summary struct {
 	Failing        int `json:"failing"`
 }
 
+type ProviderRun struct {
+	Name      string `json:"name"`
+	CodeFacts int    `json:"codeFacts"`
+}
+
+type Analysis struct {
+	Input           string        `json:"input"`
+	ProviderRuns    []ProviderRun `json:"providerRuns"`
+	CodeFacts       int           `json:"codeFacts"`
+	DeploymentUnits int           `json:"deploymentUnits"`
+	Policies        int           `json:"policies"`
+}
+
 type Report struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	GeneratedAt   time.Time `json:"generatedAt"`
 	Root          string    `json:"root"`
+	Analysis      Analysis  `json:"analysis"`
 	Findings      []Finding `json:"findings"`
 	Summary       Summary   `json:"summary"`
 }

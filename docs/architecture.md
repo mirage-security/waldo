@@ -65,3 +65,16 @@ changes. This supports narrow review decisions without relying on broad symbol a
 `waldo compare` compares base and head reports by stable identity. It separates introduced, resolved, changed, and
 unchanged findings, allowing a proposed change to be evaluated independently from existing debt. A new unresolved
 error fails comparison; an unchanged unresolved error does not.
+
+## Auditable zero results
+
+Report schema v2 records successful provider runs and their normalized fact counts alongside the number of deployment
+units and loaded policies. A provider failure still prevents report creation and exits `2`. Comparison output carries
+both reports' accounting, making an unexpected change from “provider emitted facts” to “provider emitted zero facts”
+visible even when neither report contains a finding.
+
+This accounting does not prove source coverage. Provider protocol v1 contains semantic facts, not analyzer telemetry
+about discovered files, parsed files, or skipped paths. Zero-result experiments therefore require a known-positive
+control through the same provider and deployment model, followed by counterfactual runs that independently remove the
+matching code and deployment premises. Richer source-coverage telemetry should only extend the public protocol when a
+real provider demonstrates a portable contract for it.
