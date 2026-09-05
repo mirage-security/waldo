@@ -40,3 +40,8 @@ Provider selection is policy-specific. A structural matcher can emit `deferred-e
 dataflow may warrant OpenGrep, Semgrep, or a language-specific analyzer. The transport contract does not privilege one
 engine. The in-repository [Semgrep adapter](../providers/semgrep/README.md) demonstrates how analyzer-specific results
 become normalized facts without teaching Waldo core about source syntax.
+
+Protocol v1 deliberately has no analyzer-summary record. Core records whether each provider process completed and how
+many normalized facts it emitted, but it cannot infer how many source files a provider discovered, parsed, or skipped.
+Consumers must calibrate a zero-fact run with a known positive. A future protocol revision may add coverage telemetry
+only after multiple providers can express it without leaking backend-specific output into core.

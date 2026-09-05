@@ -80,13 +80,19 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	}
 
 	var facts []model.CodeFact
+	analysisInput := model.AnalysisInputProviders
+	providerRuns := make([]model.ProviderRun, 0)
 	if *factsFlag != "" {
+		analysisInput = model.AnalysisInputFactsFile
 		facts, err = provider.LoadFacts(resolveFromRoot(root, *factsFlag), root)
 	} else {
 		if len(configuration.Providers) == 0 {
 			configuration.Providers = builtInProviders(configuration.Deployment)
 		}
-		facts, err = provider.Collect(ctx, root, configuration.Providers)
+		var collection provider.Collection
+		collection, err = provider.CollectWithSummary(ctx, root, configuration.Providers)
+		facts = collection.Facts
+		providerRuns = collection.Runs
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -98,11 +104,18 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return 2
 	}
 	report := model.Report{
-		SchemaVersion: model.SchemaVersion,
+		SchemaVersion: model.ReportSchemaVersion,
 		GeneratedAt:   time.Now().UTC(),
 		Root:          root,
-		Findings:      findings,
-		Summary:       model.Summarize(findings),
+		Analysis: model.Analysis{
+			Input:           analysisInput,
+			ProviderRuns:    providerRuns,
+			CodeFacts:       len(facts),
+			DeploymentUnits: len(configuration.Deployment.Units),
+			Policies:        len(configuration.Policies),
+		},
+		Findings: findings,
+		Summary:  model.Summarize(findings),
 	}
 	if *jsonFlag {
 		if err := writeJSON(stdout, report); err != nil {
@@ -195,8 +208,8 @@ func readReport(path string) (model.Report, error) {
 	if err := decoder.Decode(&report); err != nil {
 		return model.Report{}, err
 	}
-	if report.SchemaVersion != model.SchemaVersion {
-		return model.Report{}, fmt.Errorf("schemaVersion must be %d", model.SchemaVersion)
+	if report.SchemaVersion != 1 && report.SchemaVersion != model.ReportSchemaVersion {
+		return model.Report{}, fmt.Errorf("schemaVersion must be 1 or %d", model.ReportSchemaVersion)
 	}
 	if err := ensureEOF(decoder); err != nil {
 		return model.Report{}, err
@@ -222,6 +235,7 @@ func writeJSON(writer io.Writer, value any) error {
 }
 
 func writeHumanReport(writer io.Writer, report model.Report) {
+	writeAnalysis(writer, "Analysis", report.Analysis)
 	for _, finding := range report.Findings {
 		fmt.Fprintf(writer, "%s %s %s %s:%d [%s]\n", strings.ToUpper(string(finding.Severity)), finding.PolicyID, finding.Message, finding.CodeFact.Source.Path, finding.CodeFact.Source.Line, finding.Disposition)
 		fmt.Fprintf(writer, "  %s\n", finding.ID)
@@ -233,6 +247,8 @@ func writeHumanReport(writer io.Writer, report model.Report) {
 }
 
 func writeHumanComparison(writer io.Writer, result comparepkg.Result) {
+	writeAnalysis(writer, "Base analysis", result.BaseAnalysis)
+	writeAnalysis(writer, "Head analysis", result.HeadAnalysis)
 	for _, finding := range result.Introduced {
 		fmt.Fprintf(writer, "+ %s %s %s:%d [%s]\n", strings.ToUpper(string(finding.Severity)), finding.PolicyID, finding.CodeFact.Source.Path, finding.CodeFact.Source.Line, finding.Disposition)
 	}
@@ -243,4 +259,37 @@ func writeHumanComparison(writer io.Writer, result comparepkg.Result) {
 		fmt.Fprintf(writer, "~ %s %s: %s/%s -> %s/%s\n", change.Head.PolicyID, change.Head.ID, change.Base.Severity, change.Base.Disposition, change.Head.Severity, change.Head.Disposition)
 	}
 	fmt.Fprintf(writer, "\n%d introduced, %d resolved, %d changed, %d unchanged; %d failing changes\n", len(result.Introduced), len(result.Resolved), len(result.Changed), result.Unchanged, result.Failing)
+}
+
+func writeAnalysis(writer io.Writer, label string, analysis model.Analysis) {
+	if analysis.Input == "" {
+		fmt.Fprintf(writer, "%s: unavailable in this report version.\n", label)
+		return
+	}
+	if analysis.Input == model.AnalysisInputFactsFile {
+		fmt.Fprintf(writer, "%s: loaded %d %s from a facts file; %d deployment %s; %d %s.\n",
+			label,
+			analysis.CodeFacts, plural(analysis.CodeFacts, "code fact", "code facts"),
+			analysis.DeploymentUnits, plural(analysis.DeploymentUnits, "unit", "units"),
+			analysis.Policies, plural(analysis.Policies, "policy", "policies"),
+		)
+		return
+	}
+	fmt.Fprintf(writer, "%s: %d %s completed; %d %s; %d deployment %s; %d %s.\n",
+		label,
+		len(analysis.ProviderRuns), plural(len(analysis.ProviderRuns), "provider", "providers"),
+		analysis.CodeFacts, plural(analysis.CodeFacts, "code fact", "code facts"),
+		analysis.DeploymentUnits, plural(analysis.DeploymentUnits, "unit", "units"),
+		analysis.Policies, plural(analysis.Policies, "policy", "policies"),
+	)
+	for _, run := range analysis.ProviderRuns {
+		fmt.Fprintf(writer, "  %s: %d %s\n", run.Name, run.CodeFacts, plural(run.CodeFacts, "code fact", "code facts"))
+	}
+}
+
+func plural(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
 }

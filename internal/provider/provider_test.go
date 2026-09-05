@@ -24,6 +24,23 @@ func TestRunProviderBoundary(t *testing.T) {
 	}
 }
 
+func TestCollectWithSummaryAccountsForZeroFactProvider(t *testing.T) {
+	configured := config.Provider{
+		Name:    "empty-provider",
+		Command: []string{os.Args[0], "-test.run=TestProviderHelper", "--", "empty"},
+	}
+	collection, err := CollectWithSummary(context.Background(), t.TempDir(), []config.Provider{configured})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(collection.Facts) != 0 {
+		t.Fatalf("unexpected facts: %#v", collection.Facts)
+	}
+	if len(collection.Runs) != 1 || collection.Runs[0].Name != "empty-provider" || collection.Runs[0].CodeFacts != 0 {
+		t.Fatalf("unexpected provider accounting: %#v", collection.Runs)
+	}
+}
+
 func TestDecodeFactsRejectsInvalidRecords(t *testing.T) {
 	_, err := DecodeFacts(strings.NewReader(`{"kind":"example","source":{"path":"src/a"}}`), "test")
 	if err == nil || !strings.Contains(err.Error(), "ID cannot be empty") {
@@ -46,8 +63,14 @@ func TestDecodeFactsRejectsDuplicateProviderIdentity(t *testing.T) {
 
 func TestProviderHelper(t *testing.T) {
 	for index, argument := range os.Args {
-		if argument == "--" && index+1 < len(os.Args) && os.Args[index+1] == "emit" {
+		if argument != "--" || index+1 >= len(os.Args) {
+			continue
+		}
+		switch os.Args[index+1] {
+		case "emit":
 			fmt.Println(`{"id":"structural:one","kind":"example","source":{"path":"src/example"}}`)
+			os.Exit(0)
+		case "empty":
 			os.Exit(0)
 		}
 	}

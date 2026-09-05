@@ -17,6 +17,9 @@ func TestReportsFailsOnlyNewlyFailingChanges(t *testing.T) {
 		finding("new-error", model.SeverityError, model.DispositionUnresolved),
 	)
 	result := Reports(base, head)
+	if result.SchemaVersion != model.ReportSchemaVersion || result.BaseAnalysis.CodeFacts != 2 || result.HeadAnalysis.CodeFacts != 4 {
+		t.Fatalf("comparison did not preserve analysis accounting: %#v", result)
+	}
 	if result.Failing != 2 {
 		t.Fatalf("got %d failing changes, want 2", result.Failing)
 	}
@@ -38,5 +41,10 @@ func finding(id string, severity model.Severity, disposition model.Disposition) 
 }
 
 func report(findings ...model.Finding) model.Report {
-	return model.Report{SchemaVersion: model.SchemaVersion, Findings: findings, Summary: model.Summarize(findings)}
+	return model.Report{
+		SchemaVersion: model.ReportSchemaVersion,
+		Analysis:      model.Analysis{Input: model.AnalysisInputProviders, CodeFacts: len(findings)},
+		Findings:      findings,
+		Summary:       model.Summarize(findings),
+	}
 }
