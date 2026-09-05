@@ -2,7 +2,7 @@ version: 1
 
 policies:
   - id: durable-deferred-execution
-    title: Correctness-critical deferred execution must be durable
+    title: Required deferred work may be lost when the process restarts
     severity: error
     when:
       deployment:
@@ -13,4 +13,4 @@ policies:
         attributes:
           correctness.critical: true
           execution.authority: process-local
-    message: Correctness-critical deferred work depends on non-durable process-local scheduling.
+    message: Required deferred work may never run if the process stops or restarts first.
