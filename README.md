@@ -1,237 +1,122 @@
 # Waldo
 
-Waldo evaluates architectural invariants by combining facts about code with facts about how that code is deployed.
-For the normal case, a consumer describes only deployment topology and runs `waldo check`; Waldo supplies its stable
-policy catalog and built-in fact providers.
+Waldo catches code whose architectural guarantees do not hold in the way that code is deployed.
 
-Static analysis can tell you that code schedules deferred work. It cannot, by itself, tell you whether that work
-survives the way the process is run. A deployment model can say that processes are restartable and local scheduling
-is non-durable. It cannot, by itself, identify which source operation carries a product guarantee. Waldo joins those
-facts through an architectural policy and reports the consequence.
-
-## The proofs
-
-The repository contains two source-backed invariants:
-
-> Correctness-critical deferred work must not depend on process-local scheduling when its execution authority is
-> restartable.
-
-> Cross-request coordination that requires deployment scope must not depend on process-local authority when multiple
-> independently executing instances have instance-scoped memory.
-
-The standalone [example source](examples/durable-deferred-work/app/expiry.go) contains two Go `time.AfterFunc` calls.
-A separate [Go AST provider](providers/goast/README.md) reports both as process-local deferred execution, but marks only
-the explicitly declared expiry notification as correctness-critical. The best-effort telemetry timer is a code fact,
-not a finding.
-
-One unchanged [policy document](policies/durable-deferred-execution.yaml) evaluates that code against two distinct
-deployment models:
-
-| Input | Container service | Function runtime |
-| --- | --- | --- |
-| Code facts | Same provider output | Same provider output |
-| Execution model | `orchestrated-container` | `request-scoped-function` |
-| Restartable process | `true` | `true` |
-| Process-local scheduling durable | `false` | `false` |
-| Policy | Same shared file | Same shared file |
-| Result | One unresolved error | One unresolved error |
-
-Run the proof from the repository root:
-
-```sh
-go run ./cmd/waldo check \
-  --root . \
-  --config examples/durable-deferred-work/container.waldo.yaml
-
-go run ./cmd/waldo check \
-  --root . \
-  --config examples/durable-deferred-work/function.waldo.yaml
-```
-
-Both commands intentionally exit `1`: each produces the same stable `durable-deferred-execution` finding. The
-[foundation test](internal/foundation/foundation_test.go) executes both provider processes and verifies that the two
-models load an identical policy and produce an identical finding identity:
-
-```sh
-go test ./internal/foundation -run TestOneInvariantAcrossTwoDeploymentModels -v
-```
-
-The second proof uses a thin [Semgrep provider adapter](providers/semgrep/README.md). A deliberately narrow
-provider-side rule recognizes module-local state exposed as a deployment-scoped cross-request predicate and emits an
-analyzer-neutral `coordination` fact. The same source produces an unresolved error under the replicated model and no
-finding under the single-instance model:
-
-```sh
-go run ./cmd/waldo check \
-  --root . \
-  --config examples/process-local-coordination/replicated.waldo.yaml
-
-go run ./cmd/waldo check \
-  --root . \
-  --config examples/process-local-coordination/single-instance.waldo.yaml
-```
-
-The first command intentionally exits `1`; the second exits `0`. This proof requires Semgrep on `PATH`. The adapter
-translates only rules with explicit `metadata.waldo`; ordinary lint and security results are ignored.
-
-Waldo also ships a [JavaScript provider](providers/javascript/README.md) whose generic language rules are embedded
-behind `waldo-javascript-provider`. Waldo derives its scan targets from deployment `codeRoots`; consumers do not
-maintain provider or Semgrep configuration for built-in facts. Its first fact maps assigned asynchronous `setTimeout`
-callbacks to process-local deferred execution and explicitly leaves architectural criticality unknown. Under a
-restartable deployment with non-durable local scheduling, that produces a warning for review. It becomes an error
-only when a stronger provider establishes that completion is correctness-critical.
-
-These are the current foundation claims. Waldo is not claiming a broad rule catalog.
-
-## How Waldo reaches a finding
-
-Four independent inputs remain visible in the result:
+It combines facts from source analyzers with objective deployment facts. Waldo is not a general-purpose linter: a
+core rule belongs here only when its conclusion requires both sides.
 
 ```text
 deployment facts + code facts + architectural policy + human disposition -> findings
 ```
 
-- Deployment facts describe objective properties of deployed units. They contain no source-language semantics.
-- Code facts come from replaceable analyzers. They contain no assumptions about the deployment.
-- Policies express architectural invariants as joins over both sets of facts.
-- Dispositions record a human decision about one stable finding. They do not rewrite facts or weaken a policy.
+## Quick start
 
-Waldo core is language- and analyzer-agnostic. OpenGrep, Semgrep, GritQL, compiler-backed analyzers, and small
-structural scanners can all emit the same versioned [JSONL provider protocol](docs/provider-protocol.md). The
-in-repository Go provider and Semgrep adapter prove that interface; the core binary imports neither.
-
-## Topology-only setup
-
-Install the Waldo command and its packaged JavaScript provider into the same `PATH`:
+Waldo currently requires Go 1.27.1. JavaScript and TypeScript analysis uses local, token-free Semgrep CE as an internal
+backend.
 
 ```sh
 go install github.com/mirage-security/waldo/cmd/waldo@latest
 go install github.com/mirage-security/waldo/cmd/waldo-javascript-provider@latest
 ```
 
-The provider currently uses token-free Semgrep CE as an internal backend, so `semgrep` must also be on `PATH`. The
-consumer still invokes only Waldo:
+Install [Semgrep](https://semgrep.dev/docs/getting-started/quickstart) and make sure all three commands are on `PATH`.
+Consumers run Waldo, not Semgrep directly.
 
-```sh
-waldo check
-```
-
-The public deployment-model file is `waldo.yaml`. A normal consumer declares only deployment units, their source
-roots, and objective facts:
+Add `waldo.yaml` at the repository root:
 
 ```yaml
 version: 1
 
 deployment:
   units:
-    worker:
-      codeRoots: [services/worker]
+    reporting:
+      codeRoots:
+        - services/reporting/src
       facts:
         process.restartable: true
-        process.replicas: 3
+        process.replicas: 2
+        process.instances.concurrent: 2
+        memory.scope: instance
         scheduling.processLocal.durable: false
 ```
 
-When neither `providers` nor policies are declared, Waldo:
+Then run:
 
-- loads the stable policy documents embedded in the installed binary;
-- runs the packaged JavaScript provider over the union of deployment `codeRoots`; and
-- excludes conventional JavaScript and TypeScript test filenames by default.
-
-Policies remain data: the generic evaluator does not hard-code rule IDs, matches, severity, or messages. The
-in-repository YAML documents are embedded at build time. Advanced consumers can replace the built-in policy set with
-explicit shared files:
-
-```yaml
-policyFiles:
-  - policies/durable-deferred-execution.yaml
+```sh
+waldo check
 ```
 
-Policy files are resolved relative to the `waldo.yaml` file. Inline `policies` remain supported for self-contained
-models. Declaring either `policyFiles` or inline `policies` is an explicit replacement of the built-in set. Explicit
-`providers` similarly replace automatic provider selection; this is intended for custom analyzers and focused proofs,
-not ordinary project setup.
+Waldo automatically loads its built-in policies, selects its packaged provider, and derives analysis targets from
+`codeRoots`. Consumers do not copy policy files or maintain Semgrep rules for built-in language semantics.
 
-Conditions accept exact scalar values and the operators `equals`, `notEquals`, `greaterThan`,
-`greaterThanOrEqual`, `lessThan`, `lessThanOrEqual`, and `oneOf`.
+Example output:
 
-Dispositions target a full stable finding identity printed by the first scan:
+```text
+Analysis: 1 provider completed; 1 code fact; 1 deployment unit; 4 policies.
+  javascript: 1 code fact
+WARNING non-durable-deferred-execution This deferred work may never run if the process stops or restarts first. services/reporting/src/jobs.ts:42 [unresolved]
+  waldo:v1:...
 
-```yaml
-dispositions:
-  - finding: waldo:v1:012345...
-    disposition: accepted
-    reason: This use is deliberately best-effort and product behavior permits loss.
+1 findings: 1 unresolved, 0 accepted, 0 false-positive; 0 failing
 ```
-
-Only `accepted` and `false-positive` can be configured, and both require a reason. A resolved finding is represented by
-its absence from a later report, not by a `fixed` disposition. Finding identities derive from policy ID, deployment
-unit, provider name, and the provider's stable fact ID; file locations remain evidence and may move without changing
-the identity.
-
-See [the provider protocol](docs/provider-protocol.md) and [architecture notes](docs/architecture.md) for the boundary
-contracts.
-
-## Policy contribution boundary
-
-Only cross-boundary architectural invariants belong in Waldo core: the conclusion must require both code facts and
-deployment facts. A core policy must also be phrased without naming a programming-language API or infrastructure
-product. Checks that need no deployment context belong in analyzers; product recommendations belong in integrations.
-
-The full admission test, evidence matrix, and severity criteria are in [CONTRIBUTING.md](CONTRIBUTING.md). The small
-current and proposed rule families are tracked in the [policy taxonomy](docs/policy-taxonomy.md).
 
 ## Findings and CI
 
-Severity and disposition are separate:
+Severity and disposition are independent:
 
 - Severity: `error | warning | info`
 - Disposition: `unresolved | accepted | false-positive`
 
-`waldo check` exits `1` only for unresolved errors. Accepted and false-positive findings remain in the report as
-evidence. Configuration, provider, and input failures exit `2`, so a missing packaged provider or analysis backend
-cannot silently pass.
+`waldo check` exits `1` only when an unresolved error exists. Warnings remain visible without failing CI. Accepted and
+false-positive findings remain in reports as evidence. Configuration, provider, and input failures exit `2`.
 
-For a deterministic or precomputed scan, bypass configured providers with JSONL facts:
-
-```sh
-go run ./cmd/waldo check --root . --config waldo.yaml --facts facts.jsonl --json
-```
-
-`waldo compare` separates introduced, resolved, changed, and unchanged findings so a proposed change can be evaluated
-without conflating it with existing debt:
+Write a machine-readable report with:
 
 ```sh
-go run ./cmd/waldo compare --base base.report.json --head head.report.json --json
+waldo check --json > waldo.report.json
 ```
 
-## What should come next
+Compare a pull request with its base revision using complete reports:
 
-Use real pull requests to select the next invariant. A candidate is eligible only after a concrete source example,
-explicit deployment facts, and a conclusion that normal lint cannot reach. Likely areas include narrow local locking,
-deduplication, uniqueness, leadership, ephemeral filesystem authority, volatile buffered delivery, and coordination
-across an interleaving boundary. None should be added merely to fill out the taxonomy.
+```sh
+waldo compare --base base.report.json --head head.report.json
+```
 
-Stale state reused across an asynchronous yield is not, by itself, a Waldo invariant. A source provider may report
-that a read-modify-write path suspends, but a core policy would additionally need explicit execution and deployment
-facts establishing that suspension admits contenders which share the authority, plus a requirement that the operation
-be atomic. A runtime that preserves exclusive ownership through the operation is a negative case even when the source
-looks similar.
+Comparison separates introduced, resolved, changed, and unchanged findings. Only newly failing findings fail the
+comparison.
 
-`replica-local-authority` remains a warning. `process-local-coordination` is an error only when the provider explicitly
-establishes high confidence and deployment-wide required scope; “local cache under multiple replicas” is not enough.
+Every report records completed providers and normalized fact counts. A zero-finding result is therefore inspectable,
+but it is not proof that the codebase has no architectural violations. Calibrate corpus scans with a known positive
+and a deployment counterfactual; see [Foundation proofs](docs/foundation-proofs.md).
+
+## How it works
+
+- Deployment units declare source roots and objective properties such as restartability, concurrency, memory scope,
+  and durability.
+- Replaceable providers translate language and framework behavior into analyzer-neutral code facts.
+- Provider-neutral policies join code facts with deployment facts.
+- Human dispositions annotate one stable finding without changing facts or policy behavior.
+
+The normal setup is topology-only. Explicit providers and policy files are supported for custom integrations and
+focused experiments; they replace the built-in selection rather than extending it.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Foundation proofs](docs/foundation-proofs.md)
+- [Provider protocol](docs/provider-protocol.md)
+- [Policy taxonomy](docs/policy-taxonomy.md)
+- [Contribution and rule-admission guide](CONTRIBUTING.md)
 
 ## Development
 
 ```sh
+gofmt -w cmd internal protocol providers examples
 go test ./...
 go vet ./...
+go build ./cmd/...
+git diff --check
 ```
-
-The fixture scenarios cover durable deferred execution, benign deferred work, high-confidence process-local
-coordination, low-confidence local state, replica-local authority, an accepted architectural choice, and a known
-analyzer limitation recorded as a false positive. They express semantic inputs and expected findings rather than
-coupling policy evaluation to a source-language analyzer.
 
 ## License
 
