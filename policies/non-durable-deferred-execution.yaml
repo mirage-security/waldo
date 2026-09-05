@@ -2,7 +2,7 @@ version: 1
 
 policies:
   - id: non-durable-deferred-execution
-    title: Deferred execution may not survive instance restart
+    title: Deferred work may be lost when the process restarts
     severity: warning
     when:
       deployment:
@@ -13,4 +13,4 @@ policies:
         attributes:
           correctness.criticality: unknown
           execution.authority: process-local
-    message: Deferred work uses scheduling authority that may be lost when the execution instance restarts.
+    message: This deferred work may never run if the process stops or restarts first.
