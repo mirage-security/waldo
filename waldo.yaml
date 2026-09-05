@@ -13,13 +13,4 @@ deployment:
         scheduling.processLocal.durable: false
         memory.processLocal.authoritative: false
 
-# Analyzer commands are intentionally external to Waldo core. Each provider
-# receives one JSON request on stdin and emits one code fact per JSONL line.
-providers: []
-
-policyFiles:
-  - policies/durable-deferred-execution.yaml
-  - policies/replica-local-authority.yaml
-  - policies/process-local-coordination.yaml
-
 dispositions: []

@@ -13,11 +13,15 @@ execution.callback: async
 execution.scheduler: timer
 ```
 
-The provider intentionally does not emit `correctness.critical`. JavaScript syntax establishes the scheduling
-authority, not whether completion is an architectural requirement. A policy must not promote this fact to the
-error-level `durable-deferred-execution` invariant without separate evidence of that requirement.
+The provider emits `correctness.criticality: unknown`; JavaScript syntax establishes the scheduling authority, not
+whether completion is an architectural requirement. The built-in warning can therefore surface the loss mode, while
+the error-level `durable-deferred-execution` invariant still requires separate evidence that
+`correctness.critical: true`.
 
-Configure the provider in `waldo.yaml`:
+With a topology-only `waldo.yaml`, Waldo selects this provider automatically and derives targets from deployment
+`codeRoots`. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript files are excluded by default.
+
+An explicit provider entry is an advanced full override. For example:
 
 ```yaml
 providers:

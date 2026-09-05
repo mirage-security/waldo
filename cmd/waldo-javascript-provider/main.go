@@ -16,6 +16,17 @@ import (
 
 type values []string
 
+var defaultExcludes = []string{
+	"**/*.test.js",
+	"**/*.test.jsx",
+	"**/*.test.ts",
+	"**/*.test.tsx",
+	"**/*.spec.js",
+	"**/*.spec.jsx",
+	"**/*.spec.ts",
+	"**/*.spec.tsx",
+}
+
 func (v *values) String() string { return fmt.Sprint([]string(*v)) }
 func (v *values) Set(value string) error {
 	*v = append(*v, value)
@@ -64,11 +75,10 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 	if request.Root == "" || !filepath.IsAbs(request.Root) {
 		return fmt.Errorf("root must be an absolute path")
 	}
-
 	facts, err := javascriptprovider.Analyze(ctx, request.Root, javascriptprovider.Options{
 		SemgrepExecutable: executable,
 		Targets:           targets,
-		Excludes:          excludes,
+		Excludes:          effectiveExcludes(excludes),
 	})
 	if err != nil {
 		return err
@@ -80,4 +90,11 @@ func run(ctx context.Context, arguments []string, input io.Reader, output io.Wri
 		}
 	}
 	return nil
+}
+
+func effectiveExcludes(configured values) []string {
+	if len(configured) > 0 {
+		return append([]string(nil), configured...)
+	}
+	return append([]string(nil), defaultExcludes...)
 }

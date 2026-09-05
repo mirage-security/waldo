@@ -1,6 +1,8 @@
 # Waldo
 
 Waldo evaluates architectural invariants by combining facts about code with facts about how that code is deployed.
+For the normal case, a consumer describes only deployment topology and runs `waldo check`; Waldo supplies its stable
+policy catalog and built-in fact providers.
 
 Static analysis can tell you that code schedules deferred work. It cannot, by itself, tell you whether that work
 survives the way the process is run. A deployment model can say that processes are restartable and local scheduling
@@ -73,9 +75,11 @@ The first command intentionally exits `1`; the second exits `0`. This proof requ
 translates only rules with explicit `metadata.waldo`; ordinary lint and security results are ignored.
 
 Waldo also ships a [JavaScript provider](providers/javascript/README.md) whose generic language rules are embedded
-behind `waldo-javascript-provider`. Consumers select scan targets but do not maintain Semgrep configuration for
-built-in facts. Its first fact maps assigned asynchronous `setTimeout` callbacks to process-local deferred execution;
-it deliberately leaves architectural criticality unset.
+behind `waldo-javascript-provider`. Waldo derives its scan targets from deployment `codeRoots`; consumers do not
+maintain provider or Semgrep configuration for built-in facts. Its first fact maps assigned asynchronous `setTimeout`
+callbacks to process-local deferred execution and explicitly leaves architectural criticality unknown. Under a
+restartable deployment with non-durable local scheduling, that produces a warning for review. It becomes an error
+only when a stronger provider establishes that completion is correctness-critical.
 
 These are the current foundation claims. Waldo is not claiming a broad rule catalog.
 
@@ -96,11 +100,28 @@ Waldo core is language- and analyzer-agnostic. OpenGrep, Semgrep, GritQL, compil
 structural scanners can all emit the same versioned [JSONL provider protocol](docs/provider-protocol.md). The
 in-repository Go provider and Semgrep adapter prove that interface; the core binary imports neither.
 
-## Deployment and policy model
+## Topology-only setup
 
-The public deployment-model file is `waldo.yaml`. A deployment unit maps source roots to objective facts:
+Install the Waldo command and its packaged JavaScript provider into the same `PATH`:
+
+```sh
+go install github.com/mirage-security/waldo/cmd/waldo@latest
+go install github.com/mirage-security/waldo/cmd/waldo-javascript-provider@latest
+```
+
+The provider currently uses token-free Semgrep CE as an internal backend, so `semgrep` must also be on `PATH`. The
+consumer still invokes only Waldo:
+
+```sh
+waldo check
+```
+
+The public deployment-model file is `waldo.yaml`. A normal consumer declares only deployment units, their source
+roots, and objective facts:
 
 ```yaml
+version: 1
+
 deployment:
   units:
     worker:
@@ -111,7 +132,15 @@ deployment:
         scheduling.processLocal.durable: false
 ```
 
-Policies are data. Waldo core does not hard-code rule IDs or analyzer-specific syntax:
+When neither `providers` nor policies are declared, Waldo:
+
+- loads the stable policy documents embedded in the installed binary;
+- runs the packaged JavaScript provider over the union of deployment `codeRoots`; and
+- excludes conventional JavaScript and TypeScript test filenames by default.
+
+Policies remain data: the generic evaluator does not hard-code rule IDs, matches, severity, or messages. The
+in-repository YAML documents are embedded at build time. Advanced consumers can replace the built-in policy set with
+explicit shared files:
 
 ```yaml
 policyFiles:
@@ -119,7 +148,9 @@ policyFiles:
 ```
 
 Policy files are resolved relative to the `waldo.yaml` file. Inline `policies` remain supported for self-contained
-models, while shared files let multiple deployment models prove the same invariant without copying or changing it.
+models. Declaring either `policyFiles` or inline `policies` is an explicit replacement of the built-in set. Explicit
+`providers` similarly replace automatic provider selection; this is intended for custom analyzers and focused proofs,
+not ordinary project setup.
 
 Conditions accept exact scalar values and the operators `equals`, `notEquals`, `greaterThan`,
 `greaterThanOrEqual`, `lessThan`, `lessThanOrEqual`, and `oneOf`.
@@ -158,8 +189,8 @@ Severity and disposition are separate:
 - Disposition: `unresolved | accepted | false-positive`
 
 `waldo check` exits `1` only for unresolved errors. Accepted and false-positive findings remain in the report as
-evidence. Configuration, provider, input, and missing fact-source failures exit `2`, so an accidentally unconfigured
-CI scan cannot silently pass.
+evidence. Configuration, provider, and input failures exit `2`, so a missing packaged provider or analysis backend
+cannot silently pass.
 
 For a deterministic or precomputed scan, bypass configured providers with JSONL facts:
 

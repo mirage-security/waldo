@@ -8,11 +8,14 @@ programming languages, or infrastructure products.
 | Policy | Status | Intended claim |
 | --- | --- | --- |
 | `durable-deferred-execution` | Source-backed | Required deferred work must survive the lifetime of a restartable execution instance. |
+| `non-durable-deferred-execution` | Source-backed warning | Deferred work of unknown criticality may be lost when it relies on process-local scheduling in a restartable instance. |
 | `durable-buffered-delivery` | Future | A successful write to a local buffer cannot establish durable delivery when that buffer is lost with the instance. |
 | `ephemeral-filesystem-authority` | Future | Instance-ephemeral files cannot serve as durable authoritative state. |
 
-`durable-deferred-execution` is the only source-backed policy currently claimed by the project. New durability work
-should broaden provider coverage for the invariant before adding API-shaped variants of the same rule.
+The two source-backed deferred-execution policies express different evidence strengths for the same durability
+invariant. Proven correctness-critical work is an error; work whose criticality remains unknown is a warning. They do
+not turn every timer into an error. New durability work should broaden provider coverage for the invariant before
+adding API-shaped variants of the same rule.
 
 ## Coordination
 
