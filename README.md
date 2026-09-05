@@ -9,6 +9,17 @@ core rule belongs here only when its conclusion requires both sides.
 deployment facts + code facts + architectural policy + human disposition -> findings
 ```
 
+## Why Waldo?
+
+Code can be correct in one process and wrong once that process restarts or multiple copies run. A local timer can
+disappear before its callback runs; a counter can lose updates across replicas. A source linter sees the APIs but not
+the deployment, while an infrastructure check sees the topology but not what the code is trying to guarantee. Waldo
+evaluates the mismatch.
+
+The project grew from [an experiment in making infrastructure invisible](https://nickdirienzo.com/an-experiment-in-making-infrastructure-invisible/).
+Its name refers to Waldo et al.'s [*A Note on Distributed Computing*](https://waldo.scholars.harvard.edu/publications/note-distributed-computing):
+local and distributed systems can share interfaces, but they cannot be assumed to share semantics.
+
 ## Quick start
 
 Waldo currently requires Go 1.27.1. JavaScript and TypeScript analysis uses local, token-free Semgrep CE as an internal
