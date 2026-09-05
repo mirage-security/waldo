@@ -5,7 +5,7 @@ Waldo owns orchestration and evaluation, not source-language analysis.
 ```text
 waldo.yaml deployment units ─┐
 provider JSONL code facts ───┼─ generic policy join ─ dispositions ─ findings/report/exit
-shared policy documents ─────┘
+built-in or explicit policies ───┘
 ```
 
 ## Boundaries
@@ -21,23 +21,32 @@ shared policy documents ─────┘
 The same source root may belong to more than one deployment unit. Waldo evaluates a separate finding for each unit
 because the architectural consequence may differ with deployment facts.
 
-Policy documents can be referenced by multiple `waldo.yaml` files. Paths are resolved relative to the model file,
-making reuse explicit and allowing deployment models to vary independently from an invariant.
+The installed binary embeds Waldo's stable policy documents and loads them when a model declares no policy set.
+Likewise, the command selects packaged providers and derives source targets from deployment `codeRoots` when a model
+declares no providers. This makes topology the normal consumer configuration while preserving the process boundary:
+the core command launches provider executables through protocol v1 and does not import their source analyzers.
+
+Explicit policy documents and providers remain advanced full overrides. Policy paths are resolved relative to the
+model file, allowing focused proofs and custom integrations to vary independently from the built-in catalog.
 
 ## Initial semantic policies
 
-The examples record three reusable policies, two of them source-backed invariants:
+The built-in catalog records four reusable policies across two source-backed invariant families:
 
 1. Correctness-critical deferred work must use durable execution authority when its process is restartable. A timer is
    only one possible analyzer-observed manifestation; the invariant is not tied to a timer API or language.
-2. Deployment-scoped cross-request coordination cannot use process-local authority when multiple independently
+2. Deferred work whose criticality is not established receives a warning when its process-local scheduling authority
+   is non-durable and the execution instance can restart. The warning states the loss mode without claiming the work
+   is required.
+3. Deployment-scoped cross-request coordination cannot use process-local authority when multiple independently
    executing instances have instance-scoped memory. Error severity requires a high-confidence provider fact.
-3. A decision that may treat process-local state as authoritative in a multi-replica deployment deserves warning-level
+4. A decision that may treat process-local state as authoritative in a multi-replica deployment deserves warning-level
    review. Providers with stronger provenance or dataflow can produce better facts. More specific locking,
    deduplication, or coordination policies may justifiably be errors.
 
 These policies deliberately do not imply that all deferred work is correctness-critical or all local caches are
-architectural failures.
+architectural failures. The two deferred-execution policies are mutually exclusive for the current providers:
+established critical work produces the error, while unknown criticality produces the warning.
 
 The executable foundation proofs use a Go-specific provider and a separate Semgrep adapter. The adapter translates
 only analyzer rules with explicit Waldo metadata and leaves parsing, discovery, syntax, and concrete APIs in Semgrep.

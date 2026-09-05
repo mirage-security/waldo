@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mirage-security/waldo/internal/model"
+	builtinpolicies "github.com/mirage-security/waldo/policies"
 	"gopkg.in/yaml.v3"
 )
 
@@ -77,6 +78,11 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("decode %s: %w", path, err)
 	}
+	if len(configuration.PolicyFiles) == 0 && len(configuration.Policies) == 0 {
+		if err := loadBuiltInPolicies(&configuration); err != nil {
+			return Config{}, fmt.Errorf("load built-in policies: %w", err)
+		}
+	}
 	seenFiles := make(map[string]struct{}, len(configuration.PolicyFiles))
 	for _, configuredPath := range configuration.PolicyFiles {
 		if strings.TrimSpace(configuredPath) == "" {
@@ -111,6 +117,11 @@ func Decode(reader io.Reader) (Config, error) {
 	if len(configuration.PolicyFiles) > 0 {
 		return Config{}, fmt.Errorf("policyFiles require loading configuration from a file path")
 	}
+	if len(configuration.Policies) == 0 {
+		if err := loadBuiltInPolicies(&configuration); err != nil {
+			return Config{}, fmt.Errorf("load built-in policies: %w", err)
+		}
+	}
 	if err := configuration.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -136,7 +147,11 @@ func loadPolicyDocument(path string) (PolicyDocument, error) {
 		return PolicyDocument{}, err
 	}
 	defer file.Close()
-	decoder := yaml.NewDecoder(file)
+	return decodePolicyDocument(file)
+}
+
+func decodePolicyDocument(reader io.Reader) (PolicyDocument, error) {
+	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	var document PolicyDocument
 	if err := decoder.Decode(&document); err != nil {
@@ -152,6 +167,21 @@ func loadPolicyDocument(path string) (PolicyDocument, error) {
 		return PolicyDocument{}, fmt.Errorf("policies must contain at least one policy")
 	}
 	return document, nil
+}
+
+func loadBuiltInPolicies(configuration *Config) error {
+	documents, err := builtinpolicies.Documents()
+	if err != nil {
+		return err
+	}
+	for _, contents := range documents {
+		document, err := decodePolicyDocument(strings.NewReader(string(contents)))
+		if err != nil {
+			return err
+		}
+		configuration.Policies = append(configuration.Policies, document.Policies...)
+	}
+	return nil
 }
 
 func requireYAMLEOF(decoder *yaml.Decoder, documentName string) error {

@@ -9,8 +9,10 @@ useful. A core policy belongs here only when its conclusion requires both code f
 
 ## Current foundation
 
-The source-backed policies currently claimed by the project are `durable-deferred-execution` and
-`process-local-coordination`. The durable-execution proof uses:
+The source-backed invariant families currently claimed by the project are deferred-execution durability and
+process-local coordination. The durability family contains the strict `durable-deferred-execution` error and the
+`non-durable-deferred-execution` warning used when a provider leaves correctness criticality unknown. The strict
+durable-execution proof uses:
 
 - standalone source in `examples/durable-deferred-work/app/`;
 - the separate provider in `providers/goast/`;
@@ -35,8 +37,10 @@ until a real source example requires a distinct semantic fact or message.
   the JSON protocol without importing Waldo internals.
 - `providers/` and provider commands own source syntax, runtime semantics, framework behavior, package discovery, and
   dataflow. Core must not import provider packages.
-- Consumers configure deployment and policy. Built-in providers own generic language-fact extraction and any backend
-  rule files; do not require consumers to copy or author Semgrep configuration for built-in language semantics.
+- Consumers normally configure only deployment topology. Waldo embeds its stable policy catalog and selects packaged
+  providers by default; explicit policies and providers are advanced full overrides. Built-in providers own generic
+  language-fact extraction and backend rule files. Do not require consumers to copy or author Semgrep configuration
+  for built-in language semantics.
 - `waldo.yaml` and other deployment models own objective deployment properties. They must not contain
   programming-language runtime semantics.
 - `policies/` owns provider-neutral architectural invariants. Policy IDs, matches, messages, and severity are data,
@@ -113,7 +117,7 @@ an architectural boundary or proposing a policy.
 The project uses Go 1.27.1. Format and verify changes with:
 
 ```sh
-gofmt -w cmd internal protocol providers examples
+gofmt -w cmd internal protocol providers examples policies
 go test ./...
 go vet ./...
 go build ./cmd/...

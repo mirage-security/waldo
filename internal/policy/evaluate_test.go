@@ -3,6 +3,7 @@ package policy
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mirage-security/waldo/internal/config"
@@ -173,6 +174,83 @@ func TestProcessLocalCoordinationRequiresBothBoundaries(t *testing.T) {
 			}
 			if len(findings) != test.want {
 				t.Fatalf("got %d findings, want %d", len(findings), test.want)
+			}
+		})
+	}
+}
+
+func TestNonDurableDeferredExecutionRequiresBothBoundaries(t *testing.T) {
+	configuration, err := config.Decode(strings.NewReader(`
+version: 1
+deployment:
+  units:
+    worker:
+      codeRoots: [src]
+      facts:
+        process.restartable: true
+        scheduling.processLocal.durable: false
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fact := model.CodeFact{
+		ID:       "deferred:expiry",
+		Provider: "fixture",
+		Kind:     "deferred-execution",
+		Source:   model.SourceLocation{Path: "src/expiry.example"},
+		Attributes: map[string]any{
+			"correctness.criticality": "unknown",
+			"execution.authority":     "process-local",
+		},
+	}
+
+	tests := []struct {
+		name  string
+		fact  *model.CodeFact
+		facts map[string]any
+		want  int
+	}{
+		{
+			name: "code and deployment match",
+			fact: &fact,
+			facts: map[string]any{
+				"process.restartable":             true,
+				"scheduling.processLocal.durable": false,
+			},
+			want: 1,
+		},
+		{
+			name: "code does not match",
+			facts: map[string]any{
+				"process.restartable":             true,
+				"scheduling.processLocal.durable": false,
+			},
+		},
+		{
+			name: "deployment does not match",
+			fact: &fact,
+			facts: map[string]any{
+				"process.restartable":             false,
+				"scheduling.processLocal.durable": false,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configuration.Deployment.Units["worker"] = config.DeploymentUnit{CodeRoots: []string{"src"}, Facts: test.facts}
+			var facts []model.CodeFact
+			if test.fact != nil {
+				facts = []model.CodeFact{*test.fact}
+			}
+			findings, err := Evaluate(configuration, facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(findings) != test.want {
+				t.Fatalf("got %d findings, want %d: %#v", len(findings), test.want, findings)
+			}
+			if len(findings) == 1 && (findings[0].PolicyID != "non-durable-deferred-execution" || findings[0].Severity != model.SeverityWarning || findings[0].FailsCI()) {
+				t.Fatalf("unexpected finding: %#v", findings[0])
 			}
 		})
 	}

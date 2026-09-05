@@ -46,6 +46,9 @@ func TestAssignedAsyncTimeout(t *testing.T) {
 	if fact.Attributes["execution.authority"] != "process-local" || fact.Attributes["execution.scheduler"] != "timer" {
 		t.Fatalf("unexpected attributes: %#v", fact.Attributes)
 	}
+	if fact.Attributes["correctness.criticality"] != "unknown" {
+		t.Fatalf("provider must preserve unknown architectural criticality: %#v", fact.Attributes)
+	}
 	if _, exists := fact.Attributes["correctness.critical"]; exists {
 		t.Fatalf("language provider must not infer architectural criticality: %#v", fact.Attributes)
 	}

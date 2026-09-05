@@ -1,6 +1,8 @@
 # Code-fact provider protocol v1
 
-A provider is an executable configured as an argument vector in `waldo.yaml`:
+A provider is an executable speaking protocol v1. Waldo automatically launches its packaged providers for the normal
+topology-only configuration. Advanced consumers can replace that selection with explicit argument vectors in
+`waldo.yaml`:
 
 ```yaml
 providers:

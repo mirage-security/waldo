@@ -9,6 +9,7 @@ rules:
         kind: deferred-execution
         symbolMessagePrefix: "waldo-symbol:"
         attributes:
+          correctness.criticality: unknown
           execution.authority: process-local
           execution.callback: async
           execution.scheduler: timer

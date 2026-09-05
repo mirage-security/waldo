@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,7 +56,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	rootFlag := flags.String("root", ".", "source tree to analyze")
-	configFlag := flags.String("config", "waldo.yaml", "deployment model and policy file")
+	configFlag := flags.String("config", "waldo.yaml", "deployment model")
 	factsFlag := flags.String("facts", "", "JSONL facts file; bypasses configured providers")
 	jsonFlag := flags.Bool("json", false, "write a machine-readable report")
 	if err := flags.Parse(args); err != nil {
@@ -83,8 +84,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		facts, err = provider.LoadFacts(resolveFromRoot(root, *factsFlag), root)
 	} else {
 		if len(configuration.Providers) == 0 {
-			fmt.Fprintln(stderr, "no code-fact source: configure at least one provider or pass --facts")
-			return 2
+			configuration.Providers = builtInProviders(configuration.Deployment)
 		}
 		facts, err = provider.Collect(ctx, root, configuration.Providers)
 	}
@@ -116,6 +116,26 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return 1
 	}
 	return 0
+}
+
+func builtInProviders(deployment config.Deployment) []config.Provider {
+	roots := make(map[string]struct{})
+	for _, unit := range deployment.Units {
+		for _, root := range unit.CodeRoots {
+			roots[filepath.ToSlash(filepath.Clean(root))] = struct{}{}
+		}
+	}
+	sortedRoots := make([]string, 0, len(roots))
+	for root := range roots {
+		sortedRoots = append(sortedRoots, root)
+	}
+	sort.Strings(sortedRoots)
+
+	command := []string{"waldo-javascript-provider"}
+	for _, root := range sortedRoots {
+		command = append(command, "--target", root)
+	}
+	return []config.Provider{{Name: "javascript", Command: command}}
 }
 
 func runCompare(args []string, stdout, stderr io.Writer) int {
