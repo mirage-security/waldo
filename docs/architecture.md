@@ -57,6 +57,9 @@ Deployment adapters inspect existing artifacts but never create them implicitly.
 does not run Terraform, initialize providers, read state, or contact a backend. Unresolved properties remain absent;
 policy evaluation never treats an unknown fact as established.
 
+The same rule applies to generated Kubernetes configuration: Waldo reads raw or explicitly rendered manifests but
+does not invoke Helm, Kustomize, `kubectl`, or a control plane during `waldo check`.
+
 ## Source association
 
 Protocol v1 code providers do not report entrypoint reachability. Waldo invokes built-in providers once per distinct
@@ -77,6 +80,10 @@ configured.
 Explicit policy documents and code providers remain advanced full overrides. Policy paths resolve relative to the
 model file. Deployment adapters are selected per deployment binding; names resolve to packaged adapter executables,
 while paths allow repository-specific implementations.
+
+Packaged deployment adapters currently normalize selected Terraform resource shapes, rendered Kubernetes
+Deployments, and services in an already-merged Docker Compose file. Each adapter owns its format defaults and unknown
+states. Core sees only normalized deployment facts and never invokes Terraform, Kubernetes, Helm, or Docker tooling.
 
 ## Initial semantic policies
 
@@ -103,9 +110,11 @@ source movement while changing it when the semantic subject changes.
 `waldo compare` separates introduced, resolved, changed, and unchanged findings by stable identity. A new unresolved
 error fails comparison; an unchanged unresolved error does not.
 
-Report schema v3 records successful deployment-adapter runs, provider runs, normalized fact counts, deployments, and
-loaded policies. A failed adapter or provider prevents report creation and exits `2`. A successful zero-fact adapter
-is visible but does not prove full topology coverage.
+Report schema v4 records successful deployment-adapter runs, provider coverage, normalized fact counts, deployments,
+loaded policies, and the exact code and deployment attributes that satisfied each policy. A failed adapter or
+provider prevents report creation and exits `2`. A partial protocol-v2
+provider produces an explicitly incomplete report and exits `2` unless `--allow-partial` is set. A successful
+zero-fact adapter is visible but does not prove full topology coverage.
 
 Zero-result experiments require a known-positive control through the same adapters, providers, and policies, followed
 by counterfactual runs that independently remove the code and deployment premises.

@@ -29,12 +29,14 @@ It started with [an experiment in making infrastructure invisible](https://nickd
 
 ## Quick start
 
-Waldo requires Go 1.27.1. Install the CLI, its JavaScript provider, and the static Terraform deployment adapter:
+Waldo requires Go 1.27.1. Install the CLI, its JavaScript provider, and the deployment adapters you use:
 
 ```sh
 go install github.com/mirage-security/waldo/cmd/waldo@latest
 go install github.com/mirage-security/waldo/cmd/waldo-javascript-provider@latest
 go install github.com/mirage-security/waldo/cmd/waldo-terraform-deployment-adapter@latest
+go install github.com/mirage-security/waldo/cmd/waldo-kubernetes-deployment-adapter@latest
+go install github.com/mirage-security/waldo/cmd/waldo-compose-deployment-adapter@latest
 ```
 
 JavaScript and TypeScript analysis currently uses local, token-free Semgrep CE as an internal backend. Install
@@ -105,30 +107,38 @@ waldo compare --base base.report.json --head head.report.json
 ```
 
 Comparison separates introduced, resolved, changed, and unchanged findings. Only newly failing findings fail the
-comparison. Reports record completed deployment adapters, completed source providers, and their normalized fact
-counts, making an unexpected zero-result scan inspectable.
+comparison. Reports record completed deployment adapters, source-provider coverage, and normalized fact counts,
+making an unexpected zero-result scan inspectable. Partial provider coverage exits `2` unless the research-oriented
+`--allow-partial` flag is explicit.
+
+Human and JSON findings include the selected deployment plus the exact code and deployment facts that satisfied the
+policy, so the cross-boundary reason for a finding remains inspectable.
 
 ## Adapters and providers
 
-Terraform is the currently supported deployment format. The executable
+Terraform, rendered Kubernetes manifests, and static Docker Compose files are currently supported deployment formats. The executable
 [`terraform-ecs-service`](examples/terraform-ecs-service/) example binds an artifact to a raw ECS resource. The
 adapter also recognizes the supported Terraform AWS module shapes documented in
 [`adapters/terraform/README.md`](adapters/terraform/README.md).
 
-### Future adapters
-
-The same binding contract is designed to support additional static deployment adapters. A future Kubernetes adapter
-could use:
+The Kubernetes adapter currently recognizes `apps/v1` Deployments in raw or explicitly rendered YAML:
 
 ```yaml
 from:
   adapter: kubernetes
   source: deploy/rendered/production.yaml
   resource: Deployment/reporting
+  with:
+    namespace: production
 ```
 
-Kubernetes support is not implemented yet. This shape only demonstrates that adding it would not change the public
-binding vocabulary or core policies; it is not an executable example.
+It applies Deployment defaults, including rolling-update overlap, but never renders Helm or Kustomize and never
+contacts a cluster. See [`adapters/kubernetes/README.md`](adapters/kubernetes/README.md) for its supported evidence and
+limits.
+
+The Compose adapter selects `service/name` from one already-merged YAML file. It reads literal scale settings but does
+not invoke Docker Compose, merge overlays, or resolve environment interpolation. See
+[`adapters/compose/README.md`](adapters/compose/README.md) for its evidence boundary.
 
 External adapters use the same binding shape:
 

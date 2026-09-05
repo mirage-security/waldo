@@ -17,8 +17,17 @@ import (
 )
 
 type output struct {
-	Results []result `json:"results"`
-	Errors  []any    `json:"errors"`
+	Results []result    `json:"results"`
+	Errors  []scanError `json:"errors"`
+	Paths   struct {
+		Scanned []string `json:"scanned"`
+	} `json:"paths"`
+}
+
+type scanError struct {
+	Level string          `json:"level"`
+	Type  json.RawMessage `json:"type"`
+	Path  string          `json:"path"`
 }
 
 type result struct {
@@ -47,6 +56,24 @@ type Options struct {
 }
 
 func Analyze(ctx context.Context, root string, options Options) ([]protocol.CodeFact, error) {
+	data, err := scan(ctx, root, options)
+	if err != nil {
+		return nil, err
+	}
+	return Decode(root, data)
+}
+
+// AnalyzeDetailed retains facts from files Semgrep analyzed successfully while
+// reporting warning-level partial parsing through provider coverage.
+func AnalyzeDetailed(ctx context.Context, root string, options Options) (protocol.ProviderResult, error) {
+	data, err := scan(ctx, root, options)
+	if err != nil {
+		return protocol.ProviderResult{}, err
+	}
+	return DecodeDetailed(root, data)
+}
+
+func scan(ctx context.Context, root string, options Options) ([]byte, error) {
 	if options.Executable == "" {
 		options.Executable = "semgrep"
 	}
@@ -73,7 +100,7 @@ func Analyze(ctx context.Context, root string, options Options) ([]protocol.Code
 	if err := command.Run(); err != nil {
 		return nil, fmt.Errorf("semgrep scan: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	return Decode(root, stdout.Bytes())
+	return stdout.Bytes(), nil
 }
 
 func Decode(root string, data []byte) ([]protocol.CodeFact, error) {
@@ -84,7 +111,61 @@ func Decode(root string, data []byte) ([]protocol.CodeFact, error) {
 	if len(scan.Errors) > 0 {
 		return nil, fmt.Errorf("Semgrep reported %d scan errors", len(scan.Errors))
 	}
+	return factsFromOutput(root, scan)
+}
 
+// DecodeDetailed accepts warning-level partial and full parse diagnostics as
+// partial coverage. Every other Semgrep error remains fatal.
+func DecodeDetailed(root string, data []byte) (protocol.ProviderResult, error) {
+	var scan output
+	if err := json.Unmarshal(data, &scan); err != nil {
+		return protocol.ProviderResult{}, fmt.Errorf("decode Semgrep output: %w", err)
+	}
+
+	incompletePaths := make(map[string]struct{})
+	for _, scanError := range scan.Errors {
+		if scanError.Level != "warn" || !isIncompleteParseError(scanError.Type) {
+			return protocol.ProviderResult{}, fmt.Errorf("Semgrep reported %d scan errors", len(scan.Errors))
+		}
+		if scanError.Path != "" {
+			incompletePaths[filepath.ToSlash(filepath.Clean(scanError.Path))] = struct{}{}
+		}
+	}
+
+	facts, err := factsFromOutput(root, scan)
+	if err != nil {
+		return protocol.ProviderResult{}, err
+	}
+	coverage := protocol.ProviderCoverageComplete
+	if len(scan.Errors) > 0 {
+		coverage = protocol.ProviderCoveragePartial
+	}
+	return protocol.ProviderResult{
+		Facts: facts,
+		Summary: protocol.ProviderSummary{
+			Coverage:              coverage,
+			FilesAttempted:        len(scan.Paths.Scanned),
+			FilesNotFullyAnalyzed: len(incompletePaths),
+		},
+	}, nil
+}
+
+func isIncompleteParseError(raw json.RawMessage) bool {
+	var name string
+	if err := json.Unmarshal(raw, &name); err == nil {
+		return strings.Contains(strings.ToLower(name), "syntax error")
+	}
+	var tuple []json.RawMessage
+	if err := json.Unmarshal(raw, &tuple); err != nil || len(tuple) == 0 {
+		return false
+	}
+	if err := json.Unmarshal(tuple[0], &name); err != nil {
+		return false
+	}
+	return name == "PartialParsing"
+}
+
+func factsFromOutput(root string, scan output) ([]protocol.CodeFact, error) {
 	facts := make([]protocol.CodeFact, 0, len(scan.Results))
 	seen := make(map[string]struct{})
 	for _, candidate := range scan.Results {

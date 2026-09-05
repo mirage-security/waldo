@@ -56,6 +56,31 @@ func TestDecodeIgnoresUnannotatedResult(t *testing.T) {
 	}
 }
 
+func TestDecodeDetailedRetainsFactsAndReportsPartialCoverage(t *testing.T) {
+	data := []byte(`{"results":[{"check_id":"rule","path":"src/timer.ts","start":{"line":12,"col":1},"extra":{"message":"waldo-symbol:timer","metadata":{"waldo":{"id":"javascript.timer","kind":"deferred-execution","symbolMessagePrefix":"waldo-symbol:","attributes":{}}}}}],"errors":[{"level":"warn","type":["PartialParsing",[]],"path":"src/new-syntax.ts"},{"level":"warn","type":["PartialParsing",[]],"path":"src/new-syntax.ts"},{"level":"warn","type":"Other syntax error","path":"src/broken.ts"}],"paths":{"scanned":["src/timer.ts","src/new-syntax.ts","src/broken.ts"]}}`)
+
+	if _, err := Decode("/repo", data); err == nil {
+		t.Fatal("strict protocol-v1 decoding accepted partial analysis")
+	}
+	result, err := DecodeDetailed("/repo", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Facts) != 1 || result.Facts[0].Symbol != "timer" {
+		t.Fatalf("valid facts were not retained: %#v", result.Facts)
+	}
+	if result.Summary.Coverage != "partial" || result.Summary.FilesAttempted != 3 || result.Summary.FilesNotFullyAnalyzed != 2 {
+		t.Fatalf("unexpected coverage: %#v", result.Summary)
+	}
+}
+
+func TestDecodeDetailedRejectsNonPartialErrors(t *testing.T) {
+	data := []byte(`{"results":[],"errors":[{"level":"warn","type":"Timeout","path":"src/slow.ts"}],"paths":{"scanned":["src/slow.ts"]}}`)
+	if _, err := DecodeDetailed("/repo", data); err == nil {
+		t.Fatal("expected non-partial Semgrep error to fail")
+	}
+}
+
 func TestProcessLocalStateHandoffRule(t *testing.T) {
 	if _, err := exec.LookPath("semgrep"); err != nil {
 		t.Skip("semgrep is not installed")

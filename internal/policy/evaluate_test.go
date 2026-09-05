@@ -355,8 +355,17 @@ func TestNonDurableDeferredExecutionRequiresBothBoundaries(t *testing.T) {
 			if len(findings) != test.want {
 				t.Fatalf("got %d findings, want %d: %#v", len(findings), test.want, findings)
 			}
-			if len(findings) == 1 && (findings[0].PolicyID != "non-durable-deferred-execution" || findings[0].Severity != model.SeverityWarning || findings[0].FailsCI()) {
-				t.Fatalf("unexpected finding: %#v", findings[0])
+			if len(findings) == 1 {
+				finding := findings[0]
+				if finding.PolicyID != "non-durable-deferred-execution" || finding.Severity != model.SeverityWarning || finding.FailsCI() {
+					t.Fatalf("unexpected finding: %#v", finding)
+				}
+				if finding.MatchedCode["correctness.criticality"] != "unknown" || finding.MatchedCode["execution.authority"] != "process-local" {
+					t.Fatalf("matched code evidence is missing: %#v", finding.MatchedCode)
+				}
+				if finding.MatchedDeployment["process.restartable"] != true || finding.MatchedDeployment["scheduling.processLocal.durable"] != false {
+					t.Fatalf("matched deployment evidence is missing: %#v", finding.MatchedDeployment)
+				}
 			}
 		})
 	}

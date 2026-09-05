@@ -27,7 +27,7 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 			deployment := configuration.Deployments[deploymentName]
 			deploymentID := configuration.Service + "/" + deploymentName
 			for _, rule := range configuration.Policies {
-				matchedDeployment, matches, err := matchesPolicy(rule, deployment, fact)
+				matchedDeployment, matchedCode, matches, err := matchesPolicy(rule, deployment, fact)
 				if err != nil {
 					return nil, fmt.Errorf("policy %q: %w", rule.ID, err)
 				}
@@ -42,6 +42,7 @@ func Evaluate(configuration config.Config, facts []model.CodeFact) ([]model.Find
 					Disposition:       model.DispositionUnresolved,
 					Deployment:        deploymentID,
 					MatchedDeployment: matchedDeployment,
+					MatchedCode:       matchedCode,
 					CodeFact:          fact,
 					Message:           rule.Message,
 				}
@@ -89,40 +90,42 @@ func matchingDeployments(configuration config.Config, sourcePath string) []strin
 	return matches
 }
 
-func matchesPolicy(rule config.Policy, deployment config.Deployment, fact model.CodeFact) (map[string]any, bool, error) {
+func matchesPolicy(rule config.Policy, deployment config.Deployment, fact model.CodeFact) (map[string]any, map[string]any, bool, error) {
 	if fact.Kind != rule.When.Code.Kind {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
+	matchedCode := make(map[string]any, len(rule.When.Code.Attributes))
 	for key, expected := range rule.When.Code.Attributes {
 		actual, exists := fact.Attributes[key]
 		if !exists {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 		matches, err := matchValue(actual, expected)
 		if err != nil {
-			return nil, false, fmt.Errorf("code attribute %q: %w", key, err)
+			return nil, nil, false, fmt.Errorf("code attribute %q: %w", key, err)
 		}
 		if !matches {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
+		matchedCode[key] = actual
 	}
 
 	matched := make(map[string]any, len(rule.When.Deployment))
 	for key, expected := range rule.When.Deployment {
 		actual, exists := deployment.Facts[key]
 		if !exists {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 		matches, err := matchValue(actual, expected)
 		if err != nil {
-			return nil, false, fmt.Errorf("deployment fact %q: %w", key, err)
+			return nil, nil, false, fmt.Errorf("deployment fact %q: %w", key, err)
 		}
 		if !matches {
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 		matched[key] = actual
 	}
-	return matched, true, nil
+	return matched, matchedCode, true, nil
 }
 
 func matchValue(actual, expected any) (bool, error) {

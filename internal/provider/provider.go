@@ -26,20 +26,30 @@ func Collect(ctx context.Context, root string, providers []config.Provider) (Col
 	var facts []model.CodeFact
 	runs := make([]model.ProviderRun, 0, len(providers))
 	for _, configured := range providers {
-		providerFacts, err := run(ctx, root, configured)
+		result, err := run(ctx, root, configured)
 		if err != nil {
 			return Collection{}, err
 		}
-		facts = append(facts, providerFacts...)
-		runs = append(runs, model.ProviderRun{Name: configured.Name, CodeFacts: len(providerFacts)})
+		facts = append(facts, result.Facts...)
+		runs = append(runs, model.ProviderRun{
+			Name:                  configured.Name,
+			CodeFacts:             len(result.Facts),
+			Coverage:              result.Summary.Coverage,
+			FilesAttempted:        result.Summary.FilesAttempted,
+			FilesNotFullyAnalyzed: result.Summary.FilesNotFullyAnalyzed,
+		})
 	}
 	return Collection{Facts: facts, Runs: runs}, nil
 }
 
-func run(ctx context.Context, root string, provider config.Provider) ([]model.CodeFact, error) {
-	request, err := json.Marshal(protocol.Request{ProtocolVersion: protocol.Version, Root: root})
+func run(ctx context.Context, root string, provider config.Provider) (protocol.ProviderResult, error) {
+	version := provider.ProtocolVersion
+	if version == 0 {
+		version = protocol.Version
+	}
+	request, err := json.Marshal(protocol.Request{ProtocolVersion: version, Root: root})
 	if err != nil {
-		return nil, err
+		return protocol.ProviderResult{}, err
 	}
 	command := exec.CommandContext(ctx, provider.Command[0], provider.Command[1:]...)
 	command.Dir = root
@@ -48,23 +58,28 @@ func run(ctx context.Context, root string, provider config.Provider) ([]model.Co
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
-		return nil, fmt.Errorf("provider %q failed: %w: %s", provider.Name, err, strings.TrimSpace(stderr.String()))
+		return protocol.ProviderResult{}, fmt.Errorf("provider %q failed: %w: %s", provider.Name, err, strings.TrimSpace(stderr.String()))
 	}
 
-	facts, err := DecodeFacts(&stdout, provider.Name)
-	if err != nil {
-		return nil, fmt.Errorf("provider %q output: %w", provider.Name, err)
+	var result protocol.ProviderResult
+	if version == protocol.Version {
+		result.Facts, err = DecodeFacts(&stdout, provider.Name)
+	} else {
+		result, err = DecodeProviderRecords(&stdout, provider.Name)
 	}
-	for index := range facts {
-		facts[index].Provider = provider.Name
-		if err := normalizeFactPath(root, &facts[index]); err != nil {
-			return nil, fmt.Errorf("provider %q fact %q: %w", provider.Name, facts[index].ID, err)
+	if err != nil {
+		return protocol.ProviderResult{}, fmt.Errorf("provider %q output: %w", provider.Name, err)
+	}
+	for index := range result.Facts {
+		result.Facts[index].Provider = provider.Name
+		if err := normalizeFactPath(root, &result.Facts[index]); err != nil {
+			return protocol.ProviderResult{}, fmt.Errorf("provider %q fact %q: %w", provider.Name, result.Facts[index].ID, err)
 		}
 	}
-	if err := validateUnique(facts); err != nil {
-		return nil, fmt.Errorf("provider %q output: %w", provider.Name, err)
+	if err := validateUnique(result.Facts); err != nil {
+		return protocol.ProviderResult{}, fmt.Errorf("provider %q output: %w", provider.Name, err)
 	}
-	return facts, nil
+	return result, nil
 }
 
 func LoadFacts(path string, root string) ([]model.CodeFact, error) {
@@ -114,6 +129,73 @@ func DecodeFacts(reader io.Reader, defaultProvider string) ([]model.CodeFact, er
 		return nil, err
 	}
 	return facts, nil
+}
+
+func DecodeProviderRecords(reader io.Reader, defaultProvider string) (protocol.ProviderResult, error) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	var result protocol.ProviderResult
+	line := 0
+	seenSummary := false
+	for scanner.Scan() {
+		line++
+		if strings.TrimSpace(scanner.Text()) == "" {
+			continue
+		}
+		if seenSummary {
+			return protocol.ProviderResult{}, fmt.Errorf("line %d: provider summary must be the final record", line)
+		}
+		var record protocol.ProviderRecord
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			return protocol.ProviderResult{}, fmt.Errorf("line %d: %w", line, err)
+		}
+		switch record.Type {
+		case protocol.ProviderRecordFact:
+			if record.Fact == nil || record.Summary != nil {
+				return protocol.ProviderResult{}, fmt.Errorf("line %d: fact record must contain only fact", line)
+			}
+			fact := *record.Fact
+			if fact.Provider == "" {
+				fact.Provider = defaultProvider
+			}
+			if err := validateFact(fact); err != nil {
+				return protocol.ProviderResult{}, fmt.Errorf("line %d: %w", line, err)
+			}
+			result.Facts = append(result.Facts, fact)
+		case protocol.ProviderRecordSummary:
+			if record.Summary == nil || record.Fact != nil {
+				return protocol.ProviderResult{}, fmt.Errorf("line %d: summary record must contain only summary", line)
+			}
+			if err := validateProviderSummary(*record.Summary); err != nil {
+				return protocol.ProviderResult{}, fmt.Errorf("line %d: %w", line, err)
+			}
+			result.Summary = *record.Summary
+			seenSummary = true
+		default:
+			return protocol.ProviderResult{}, fmt.Errorf("line %d: unknown provider record type %q", line, record.Type)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return protocol.ProviderResult{}, err
+	}
+	if !seenSummary {
+		return protocol.ProviderResult{}, fmt.Errorf("provider stream is missing its summary record")
+	}
+	return result, nil
+}
+
+func validateProviderSummary(summary protocol.ProviderSummary) error {
+	if !summary.Coverage.Valid() {
+		return fmt.Errorf("provider summary has invalid coverage %q", summary.Coverage)
+	}
+	if summary.FilesAttempted < 0 || summary.FilesNotFullyAnalyzed < 0 ||
+		(summary.FilesAttempted > 0 && summary.FilesNotFullyAnalyzed > summary.FilesAttempted) {
+		return fmt.Errorf("provider summary has invalid file counts")
+	}
+	if summary.Coverage == protocol.ProviderCoverageComplete && summary.FilesNotFullyAnalyzed != 0 {
+		return fmt.Errorf("complete provider summary cannot contain files that were not fully analyzed")
+	}
+	return nil
 }
 
 func validateFact(fact model.CodeFact) error {

@@ -46,6 +46,18 @@ The Terraform adapter follows checked-in local modules, variable defaults, selec
 locals. It recognizes raw AWS ECS and Lambda resources and the corresponding official modules. It does not attempt to
 implement complete Terraform evaluation or infer remote values.
 
+The Kubernetes adapter reads raw or explicitly rendered YAML files and directories. It currently recognizes
+`apps/v1` Deployments, applies API defaults relevant to rollout concurrency, and optionally selects
+`with.namespace`. Rolling updates establish concurrent replicas but do not emit a numeric maximum because terminating
+pods can outlive the controller's `replicas + maxSurge` target. It does not render Helm or Kustomize or contact a
+cluster.
+
+The Docker Compose adapter reads one already-merged YAML file and selects `service/name`. It uses literal `scale` and
+`deploy.replicas` values and the one-container default, while omitting concurrency facts when scale or deploy mode is
+not statically known. Its restartability fact means the service container can be replaced during deployment; it does
+not depend on the optional automatic `restart` policy. The adapter does not invoke Docker Compose, merge overlays,
+resolve environment interpolation, or inspect an engine.
+
 The built-in `facts` adapter reads a small versioned document containing normalized facts. It supports executable
 policy matrices and platforms without an adapter:
 
