@@ -19,6 +19,17 @@ func TestLoadResolvesSharedPolicyFiles(t *testing.T) {
 	}
 }
 
+func TestLoadTerraformExample(t *testing.T) {
+	configuration, err := Load(filepath.Join("..", "..", "examples", "terraform-ecs-service", "waldo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment := configuration.Deployments["production"]
+	if configuration.Service != "expiry-notifier" || deployment.Artifact != "worker" || deployment.From.Adapter != "terraform" || deployment.From.Resource != "aws_ecs_service.worker" {
+		t.Fatalf("unexpected Terraform example: %#v", configuration)
+	}
+}
+
 func TestDecodeLoadsBuiltInPoliciesForBindingOnlyModel(t *testing.T) {
 	configuration, err := Decode(strings.NewReader(validModel("")))
 	if err != nil {

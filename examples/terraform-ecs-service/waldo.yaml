@@ -1,0 +1,25 @@
+version: 2
+service: expiry-notifier
+
+artifacts:
+  worker:
+    source: app
+    entrypoint: expiry.go
+
+deployments:
+  production:
+    artifact: worker
+    from:
+      adapter: terraform
+      source: infra
+      resource: aws_ecs_service.worker
+      with:
+        varFiles:
+          - production.tfvars
+
+providers:
+  - name: go-ast
+    command: [go, run, ./cmd/waldo-go-ast-provider]
+
+policyFiles:
+  - ../../policies/durable-deferred-execution.yaml

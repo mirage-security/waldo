@@ -26,4 +26,4 @@ differs in platform execution model and scale but normalizes the properties rele
 restartable and process-local scheduling is non-durable. Both files reference the same policy document
 at [`../../policies/durable-deferred-execution.yaml`](../../policies/durable-deferred-execution.yaml); the rule is not
 copied or specialized per platform. The `facts` adapter is used here as an executable proof fixture; normal consumers
-bind artifacts to their existing Terraform, Kubernetes, or other deployment definitions.
+bind artifacts to a format supported by a deployment adapter, currently Terraform.
