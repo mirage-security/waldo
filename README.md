@@ -17,7 +17,7 @@ that need only one side belong in an ordinary source analyzer or infrastructure 
 
 ### Can't I check this another way?
 
-Yes. A project can write source checks, inspect its deployment configuration, and maintain the code that joins their
+A project can write source checks, inspect its deployment configuration, and maintain the code that joins their
 results. Waldo packages that workflow with a shared fact contract, policies, stable finding identities, dispositions,
 and base/head comparison. It complements source linters, security scanners, and infrastructure validation rather than
 replacing them.
