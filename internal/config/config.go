@@ -34,8 +34,13 @@ type Deployment struct {
 }
 
 type DeploymentUnit struct {
-	CodeRoots []string       `yaml:"codeRoots"`
-	Facts     map[string]any `yaml:"facts"`
+	Source DeploymentSource `yaml:"source"`
+	Facts  map[string]any   `yaml:"facts"`
+}
+
+type DeploymentSource struct {
+	Root       string `yaml:"root"`
+	Entrypoint string `yaml:"entrypoint,omitempty"`
 }
 
 type Provider struct {
@@ -206,14 +211,18 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("deployment unit name cannot be empty")
 		}
-		if len(unit.CodeRoots) == 0 {
-			return fmt.Errorf("deployment unit %q must declare codeRoots", name)
+		root := unit.Source.Root
+		cleanedRoot := path.Clean(strings.ReplaceAll(root, "\\", "/"))
+		if strings.TrimSpace(root) == "" || strings.HasPrefix(cleanedRoot, "/") || cleanedRoot == ".." || strings.HasPrefix(cleanedRoot, "../") {
+			return fmt.Errorf("deployment unit %q source.root %q must be root-relative", name, root)
 		}
-		for _, root := range unit.CodeRoots {
-			cleaned := path.Clean(strings.ReplaceAll(root, "\\", "/"))
-			if strings.TrimSpace(root) == "" || strings.HasPrefix(cleaned, "/") || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-				return fmt.Errorf("deployment unit %q codeRoot %q must be root-relative", name, root)
-			}
+		entrypoint := unit.Source.Entrypoint
+		if entrypoint == "" {
+			continue
+		}
+		cleanedEntrypoint := path.Clean(strings.ReplaceAll(entrypoint, "\\", "/"))
+		if strings.TrimSpace(entrypoint) == "" || cleanedEntrypoint == "." || strings.HasPrefix(cleanedEntrypoint, "/") || cleanedEntrypoint == ".." || strings.HasPrefix(cleanedEntrypoint, "../") {
+			return fmt.Errorf("deployment unit %q source.entrypoint %q must be relative to source.root", name, entrypoint)
 		}
 	}
 

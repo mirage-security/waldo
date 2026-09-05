@@ -45,3 +45,9 @@ Protocol v1 deliberately has no analyzer-summary record. Core records whether ea
 many normalized facts it emitted, but it cannot infer how many source files a provider discovered, parsed, or skipped.
 Consumers must calibrate a zero-fact run with a known positive. A future protocol revision may add coverage telemetry
 only after multiple providers can express it without leaking backend-specific output into core.
+
+Protocol v1 also does not carry deployment entrypoints or provider-produced reachability. Waldo invokes built-in
+providers once per distinct `source.root` and conservatively joins a fact to every deployment unit whose root contains
+the fact's path. `source.entrypoint` records separate executables in the deployment model, but distinguishing which
+same-root executable can reach a fact requires a future provider-backed protocol extension. That extension must carry
+an analyzer-neutral reachability relation; it must not teach core how a particular language resolves imports.

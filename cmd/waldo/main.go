@@ -134,9 +134,8 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 func builtInProviders(deployment config.Deployment) []config.Provider {
 	roots := make(map[string]struct{})
 	for _, unit := range deployment.Units {
-		for _, root := range unit.CodeRoots {
-			roots[filepath.ToSlash(filepath.Clean(root))] = struct{}{}
-		}
+		root := unit.Source.Root
+		roots[filepath.ToSlash(filepath.Clean(root))] = struct{}{}
 	}
 	sortedRoots := make([]string, 0, len(roots))
 	for root := range roots {

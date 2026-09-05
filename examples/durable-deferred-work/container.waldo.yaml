@@ -3,7 +3,9 @@ version: 1
 deployment:
   units:
     expiry-notifier:
-      codeRoots: [examples/durable-deferred-work/app]
+      source:
+        root: examples/durable-deferred-work/app
+        entrypoint: expiry.go
       facts:
         platform.executionModel: orchestrated-container
         process.restartable: true

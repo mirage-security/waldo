@@ -3,7 +3,9 @@ version: 1
 deployment:
   units:
     call-gateway:
-      codeRoots: [examples/process-local-coordination/app]
+      source:
+        root: examples/process-local-coordination/app
+        entrypoint: state.ts
       facts:
         platform.executionModel: orchestrated-container
         process.instances.concurrent: 1

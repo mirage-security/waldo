@@ -51,7 +51,8 @@ func TestCheckMakesZeroFindingsAuditable(t *testing.T) {
 deployment:
   units:
     worker:
-      codeRoots: [.]
+      source:
+        root: .
       facts:
         process.restartable: true
 
@@ -128,16 +129,16 @@ func TestCheckFailsClosedWhenBuiltInProviderIsMissing(t *testing.T) {
 	}
 }
 
-func TestBuiltInProviderTargetsDeploymentCodeRoots(t *testing.T) {
+func TestBuiltInProviderTargetsDistinctDeploymentSourceRoots(t *testing.T) {
 	providers := builtInProviders(config.Deployment{Units: map[string]config.DeploymentUnit{
-		"api":       {CodeRoots: []string{"services/shared", "services/api"}},
-		"reporting": {CodeRoots: []string{"services/shared", "services/reporting"}},
+		"api-http":       {Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/http.ts"}},
+		"api-worker":     {Source: config.DeploymentSource{Root: "services/api", Entrypoint: "src/worker.ts"}},
+		"reporting-http": {Source: config.DeploymentSource{Root: "services/reporting", Entrypoint: "src/http.ts"}},
 	}})
 	want := []string{
 		"waldo-javascript-provider",
 		"--target", "services/api",
 		"--target", "services/reporting",
-		"--target", "services/shared",
 	}
 	if len(providers) != 1 || providers[0].Name != "javascript" || !reflect.DeepEqual(providers[0].Command, want) {
 		t.Fatalf("unexpected built-in providers: %#v", providers)

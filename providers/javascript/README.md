@@ -19,7 +19,8 @@ the error-level `durable-deferred-execution` invariant still requires separate e
 `correctness.critical: true`.
 
 With a topology-only `waldo.yaml`, Waldo selects this provider automatically and derives targets from deployment
-`codeRoots`. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript files are excluded by default.
+`source.root` values. Repeated roots are scanned once. Conventional `*.test.*` and `*.spec.*` JavaScript and TypeScript
+files are excluded by default.
 
 An explicit provider entry is an advanced full override. For example:
 

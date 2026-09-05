@@ -41,8 +41,9 @@ version: 1
 deployment:
   units:
     reporting:
-      codeRoots:
-        - services/reporting/src
+      source:
+        root: services/reporting
+        entrypoint: src/index.ts
       facts:
         process.restartable: true
         process.replicas: 2
@@ -57,8 +58,9 @@ Then run:
 waldo check
 ```
 
-Waldo automatically loads its built-in policies, selects its packaged provider, and derives analysis targets from
-`codeRoots`. Consumers do not copy policy files or maintain Semgrep rules for built-in language semantics.
+Waldo automatically loads its built-in policies and selects its packaged provider. `source.root` identifies the
+project that produces the deployment unit; `source.entrypoint` distinguishes separately deployed executables from the
+same project. Consumers do not copy policy files or maintain Semgrep rules for built-in language semantics.
 
 Example output:
 
@@ -102,8 +104,8 @@ and a deployment counterfactual; see [Foundation proofs](docs/foundation-proofs.
 
 ## How it works
 
-- Deployment units declare source roots and objective properties such as restartability, concurrency, memory scope,
-  and durability.
+- Deployment units declare a source root, an optional executable entrypoint, and objective properties such as
+  restartability, concurrency, memory scope, and durability.
 - Replaceable providers translate language and framework behavior into analyzer-neutral code facts.
 - Provider-neutral policies join code facts with deployment facts.
 - Human dispositions annotate one stable finding without changing facts or policy behavior.

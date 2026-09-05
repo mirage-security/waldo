@@ -71,12 +71,9 @@ func matchingUnits(units map[string]config.DeploymentUnit, sourcePath string) []
 	path := filepath.ToSlash(filepath.Clean(sourcePath))
 	var matches []string
 	for name, unit := range units {
-		for _, configuredRoot := range unit.CodeRoots {
-			root := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(configuredRoot)), "/")
-			if root == "." || path == root || strings.HasPrefix(path, root+"/") {
-				matches = append(matches, name)
-				break
-			}
+		root := strings.TrimSuffix(filepath.ToSlash(filepath.Clean(unit.Source.Root)), "/")
+		if root == "." || path == root || strings.HasPrefix(path, root+"/") {
+			matches = append(matches, name)
 		}
 	}
 	sort.Strings(matches)

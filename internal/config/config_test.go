@@ -22,7 +22,9 @@ version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
+        entrypoint: worker.ts
       facts:
         process.restartable: true
 `
@@ -46,13 +48,58 @@ deployment:
 	}
 }
 
+func TestDecodePreservesDeploymentSource(t *testing.T) {
+	input := `
+version: 1
+deployment:
+  units:
+    api-http:
+      source:
+        root: services/api
+        entrypoint: src/http.ts
+      facts: {}
+`
+	configuration, err := Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := configuration.Deployment.Units["api-http"].Source
+	if source.Root != "services/api" || source.Entrypoint != "src/http.ts" {
+		t.Fatalf("unexpected deployment source: %#v", source)
+	}
+}
+
+func TestDecodeRejectsInvalidDeploymentSource(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourceYAML string
+		want       string
+	}{
+		{name: "missing root", sourceYAML: "{}", want: "source.root"},
+		{name: "absolute root", sourceYAML: "{root: /services/api}", want: "source.root"},
+		{name: "escaping root", sourceYAML: "{root: ../api}", want: "source.root"},
+		{name: "absolute entrypoint", sourceYAML: "{root: services/api, entrypoint: /src/http.ts}", want: "source.entrypoint"},
+		{name: "escaping entrypoint", sourceYAML: "{root: services/api, entrypoint: ../worker.ts}", want: "source.entrypoint"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := "version: 1\ndeployment:\n  units:\n    worker:\n      source: " + test.sourceYAML + "\n      facts: {}\n"
+			_, err := Decode(strings.NewReader(input))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q validation error, got %v", test.want, err)
+			}
+		})
+	}
+}
+
 func TestDecodeExplicitPoliciesOverrideBuiltIns(t *testing.T) {
 	input := `
 version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
       facts: {}
 policies:
   - id: example
@@ -79,7 +126,8 @@ version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
       facts: {}
 policies:
   - id: example
@@ -104,7 +152,8 @@ version: 1
 deployment:
   units:
     worker:
-      codeRoots: [src]
+      source:
+        root: src
       facts: {}
 policies:
   - id: example

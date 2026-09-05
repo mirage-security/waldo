@@ -3,8 +3,9 @@ version: 1
 deployment:
   units:
     application:
-      codeRoots:
-        - .
+      source:
+        root: .
+        entrypoint: cmd/waldo/main.go
       facts:
         process.restartable: true
         process.replicas: 1
