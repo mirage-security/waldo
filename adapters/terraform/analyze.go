@@ -11,10 +11,15 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/ext/tryfunc"
+	"github.com/hashicorp/hcl/v2/ext/typeexpr"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/mirage-security/waldo/protocol"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
+	"github.com/zclconf/go-cty/cty/function"
+	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
 type module struct {
@@ -45,11 +50,12 @@ func Analyze(request protocol.DeploymentRequest) (protocol.DeploymentResult, err
 	if err != nil {
 		return protocol.DeploymentResult{}, err
 	}
-	segments := strings.Split(request.Resource, ".")
-	if len(segments) < 2 {
-		return protocol.DeploymentResult{}, fmt.Errorf("resource %q must be a Terraform address", request.Resource)
+	segments, err := parseAddress(request.Resource)
+	if err != nil {
+		return protocol.DeploymentResult{}, err
 	}
-	facts, found, err := inspectAddress(request.Root, rootModule, segments)
+	remainingInstances := 1024
+	facts, found, err := inspectAddress(request.Root, rootModule, segments, &remainingInstances)
 	if err != nil {
 		return protocol.DeploymentResult{}, err
 	}
@@ -59,8 +65,8 @@ func Analyze(request protocol.DeploymentRequest) (protocol.DeploymentResult, err
 	return protocol.DeploymentResult{Facts: facts}, nil
 }
 
-func inspectAddress(root string, current *module, address []string) (map[string]any, bool, error) {
-	kind, name := address[0], unindex(address[1])
+func inspectAddress(root string, current *module, address []resourceAddress, remainingInstances *int) (map[string]any, bool, error) {
+	kind, name := address[0].kind, address[0].name
 	block := findBlock(current.body, kind, name)
 	if block == nil {
 		return nil, false, nil
@@ -71,26 +77,56 @@ func inspectAddress(root string, current *module, address []string) (map[string]
 		return map[string]any{}, true, nil
 	}
 	if kind == "module" {
-		child, remote, err := loadChild(root, current, block)
+		contexts, err := moduleContexts(block, current.context, remainingInstances)
 		if err != nil {
 			return nil, false, err
 		}
-		if len(address) > 2 {
-			if remote != "" {
-				return nil, false, fmt.Errorf("resource address enters remote module %q, whose source is unavailable", remote)
+		facts := make(map[string]any)
+		matched := false
+		for _, context := range contexts {
+			if address[0].index != nil && block.Body.Attributes["for_each"] != nil {
+				key := context.Variables["each"].GetAttr("key")
+				if !key.RawEquals(*address[0].index) {
+					continue
+				}
 			}
-			return inspectAddress(root, child, address[2:])
+			matched = true
+			instance := &module{dir: current.dir, body: current.body, context: context}
+			child, remote, err := loadChild(root, instance, block)
+			if err != nil {
+				return nil, false, err
+			}
+			var childFacts map[string]any
+			if len(address) > 1 {
+				if remote != "" {
+					return nil, false, fmt.Errorf("resource address enters remote module %q, whose source is unavailable", remote)
+				}
+				var found bool
+				childFacts, found, err = inspectAddress(root, child, address[1:], remainingInstances)
+				if err != nil || !found {
+					return nil, found, err
+				}
+			} else if remote != "" {
+				childFacts = factsForRemoteModule(remote, block, context)
+			} else {
+				childFacts, err = scanModule(root, child, map[string]bool{}, remainingInstances)
+				if err != nil {
+					return nil, false, err
+				}
+			}
+			if err := mergeFacts(facts, childFacts); err != nil {
+				return nil, false, err
+			}
 		}
-		if remote != "" {
-			return factsForRemoteModule(remote, block, current.context), true, nil
+		if !matched && address[0].index != nil {
+			return nil, false, nil
 		}
-		facts, err := scanModule(root, child, map[string]bool{})
-		return facts, true, err
+		return facts, true, nil
 	}
 	return factsForResource(kind, block, current.context), true, nil
 }
 
-func scanModule(root string, current *module, visiting map[string]bool) (map[string]any, error) {
+func scanModule(root string, current *module, visiting map[string]bool, remainingInstances *int) (map[string]any, error) {
 	if visiting[current.dir] {
 		return map[string]any{}, nil
 	}
@@ -109,22 +145,28 @@ func scanModule(root string, current *module, visiting map[string]bool) (map[str
 				}
 			}
 		case "module":
-			child, remote, err := loadChild(root, current, block)
+			contexts, err := moduleContexts(block, current.context, remainingInstances)
 			if err != nil {
 				return nil, err
 			}
-			if remote != "" {
-				if err := mergeFacts(facts, factsForRemoteModule(remote, block, current.context)); err != nil {
+			for _, context := range contexts {
+				instance := &module{dir: current.dir, body: current.body, context: context}
+				child, remote, err := loadChild(root, instance, block)
+				if err != nil {
 					return nil, err
 				}
-				continue
-			}
-			childFacts, err := scanModule(root, child, visiting)
-			if err != nil {
-				return nil, err
-			}
-			if err := mergeFacts(facts, childFacts); err != nil {
-				return nil, err
+				var childFacts map[string]any
+				if remote != "" {
+					childFacts = factsForRemoteModule(remote, block, context)
+				} else {
+					childFacts, err = scanModule(root, child, visiting, remainingInstances)
+					if err != nil {
+						return nil, err
+					}
+				}
+				if err := mergeFacts(facts, childFacts); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -141,6 +183,7 @@ func loadModule(root, dir string, supplied map[string]cty.Value, varFiles []stri
 		if block.Type != "variable" || len(block.Labels) != 1 {
 			continue
 		}
+		variables[block.Labels[0]] = cty.DynamicVal
 		if attribute := block.Body.Attributes["default"]; attribute != nil {
 			if value, ok := evaluateNullable(attribute.Expr, nil); ok {
 				variables[block.Labels[0]] = value
@@ -166,12 +209,76 @@ func loadModule(root, dir string, supplied map[string]cty.Value, varFiles []stri
 			variables[name] = value
 		}
 	}
-	context := &hcl.EvalContext{Variables: map[string]cty.Value{"var": objectValue(variables)}}
+	// Apply Terraform variable type conversion and optional attribute defaults
+	// before try/lookup inspect a supplied object. Otherwise a missing optional
+	// attribute could incorrectly take the expression's fallback.
+	for _, block := range body.Blocks {
+		if block.Type != "variable" || len(block.Labels) != 1 {
+			continue
+		}
+		name := block.Labels[0]
+		value := variables[name]
+		if nullable, known := knownBool(block.Body.Attributes, nil, "nullable"); known && !nullable && value.IsNull() {
+			if fallback := block.Body.Attributes["default"]; fallback != nil {
+				if configured, known := evaluateNullable(fallback.Expr, nil); known {
+					value = configured
+				}
+			}
+			if value.IsNull() {
+				value = cty.DynamicVal
+			}
+		}
+		if constraint := block.Body.Attributes["type"]; constraint != nil {
+			target, defaults, diagnostics := typeexpr.TypeConstraintWithDefaults(constraint.Expr)
+			if diagnostics.HasErrors() {
+				variables[name] = cty.DynamicVal
+				continue
+			}
+			if defaults != nil {
+				value = defaults.Apply(value)
+			}
+			converted, err := convert.Convert(value, target)
+			if err != nil {
+				variables[name] = cty.DynamicVal
+				continue
+			}
+			value = converted
+		}
+		variables[name] = value
+	}
+	context := &hcl.EvalContext{
+		Variables: map[string]cty.Value{"var": objectValue(variables)},
+		// Pure expression functions only: no files, environment, providers, or network.
+		Functions: map[string]function.Function{
+			"try": tryfunc.TryFunc, "can": tryfunc.CanFunc,
+			"length": stdlib.LengthFunc, "concat": stdlib.ConcatFunc,
+			"merge": stdlib.MergeFunc, "flatten": stdlib.FlattenFunc,
+			"lookup": stdlib.LookupFunc, "keys": stdlib.KeysFunc,
+			"values": stdlib.ValuesFunc, "split": stdlib.SplitFunc,
+			"element": stdlib.ElementFunc, "regex": stdlib.RegexFunc,
+		},
+	}
+	// Runtime values are unknown, not missing attributes that try() may replace.
+	context.Variables["data"] = cty.DynamicVal
+	context.Variables["module"] = cty.DynamicVal
+	context.Variables["each"] = cty.DynamicVal
+	context.Variables["count"] = cty.DynamicVal
+	context.Variables["path"] = cty.DynamicVal
+	context.Variables["terraform"] = cty.DynamicVal
+	context.Variables["self"] = cty.DynamicVal
+	for _, block := range body.Blocks {
+		if block.Type == "resource" && len(block.Labels) == 2 {
+			context.Variables[block.Labels[0]] = cty.DynamicVal
+		}
+	}
 	locals := make(map[string]cty.Value)
 	localCount := 0
 	for _, block := range body.Blocks {
 		if block.Type == "locals" {
 			localCount += len(block.Body.Attributes)
+			for name := range block.Body.Attributes {
+				locals[name] = cty.DynamicVal
+			}
 		}
 	}
 	for range localCount {
@@ -182,10 +289,7 @@ func loadModule(root, dir string, supplied map[string]cty.Value, varFiles []stri
 				continue
 			}
 			for name, attribute := range block.Body.Attributes {
-				if _, exists := locals[name]; exists {
-					continue
-				}
-				if value, ok := evaluate(attribute.Expr, context); ok {
+				if value, ok := evaluateNullable(attribute.Expr, context); ok && !value.RawEquals(locals[name]) {
 					locals[name] = value
 					progress = true
 				}
@@ -409,11 +513,85 @@ func evaluate(expression hcl.Expression, context *hcl.EvalContext) (cty.Value, b
 }
 
 func evaluateNullable(expression hcl.Expression, context *hcl.EvalContext) (cty.Value, bool) {
+	// Preserve the known fields of an object when unrelated deployment-only
+	// attributes (e.g. a resource ARN) cannot be resolved statically. Unknown
+	// fields remain present, so try/lookup cannot replace them with defaults.
+	if object, ok := expression.(*hclsyntax.ObjectConsExpr); ok {
+		values := make(map[string]cty.Value)
+		for _, item := range object.Items {
+			key, known := evaluate(item.KeyExpr, context)
+			if !known || key.Type() != cty.String {
+				return cty.NilVal, false
+			}
+			value, known := evaluateNullable(item.ValueExpr, context)
+			if !known {
+				value = cty.DynamicVal
+			}
+			values[key.AsString()] = value
+		}
+		return objectValue(values), true
+	}
+	// HCL reports an unsupported function as an error. Terraform may know that
+	// function, so try/can must not interpret our evaluator's limit as a failure
+	// in the deployment expression and substitute a fallback.
+	if node, ok := expression.(hclsyntax.Node); ok {
+		unsupported := false
+		hclsyntax.VisitAll(node, func(node hclsyntax.Node) hcl.Diagnostics {
+			if call, ok := node.(*hclsyntax.FunctionCallExpr); ok {
+				supported := false
+				for scope := context; scope != nil; scope = scope.Parent() {
+					if _, exists := scope.Functions[call.Name]; exists {
+						supported = true
+						break
+					}
+				}
+				if !supported {
+					unsupported = true
+				}
+			}
+			return nil
+		})
+		if unsupported {
+			return cty.NilVal, false
+		}
+	}
 	value, diagnostics := expression.Value(context)
 	if diagnostics.HasErrors() || !value.IsKnown() {
 		return cty.NilVal, false
 	}
 	return value, true
+}
+
+// moduleContexts binds each.key/each.value while following local module instances.
+// Unknown cardinality is left unanalyzed, like an unknown count.
+func moduleContexts(block *hclsyntax.Block, context *hcl.EvalContext, remainingInstances *int) ([]*hcl.EvalContext, error) {
+	attribute := block.Body.Attributes["for_each"]
+	if attribute == nil {
+		if *remainingInstances < 1 {
+			return nil, fmt.Errorf("module traversal exceeds 1024 static instances")
+		}
+		*remainingInstances--
+		return []*hcl.EvalContext{context}, nil
+	}
+	collection, known := evaluate(attribute.Expr, context)
+	if !known || !collection.CanIterateElements() {
+		return nil, nil
+	}
+	if !collection.Length().IsKnown() {
+		return nil, nil
+	}
+	if collection.LengthInt() > *remainingInstances {
+		return nil, fmt.Errorf("module traversal exceeds 1024 static instances")
+	}
+	*remainingInstances -= collection.LengthInt()
+	var contexts []*hcl.EvalContext
+	for iterator := collection.ElementIterator(); iterator.Next(); {
+		key, value := iterator.Element()
+		child := context.NewChild()
+		child.Variables = map[string]cty.Value{"each": cty.ObjectVal(map[string]cty.Value{"key": key, "value": value})}
+		contexts = append(contexts, child)
+	}
+	return contexts, nil
 }
 
 func blockEnabled(block *hclsyntax.Block, context *hcl.EvalContext) (bool, bool) {
@@ -554,11 +732,55 @@ func mergeFacts(destination, source map[string]any) error {
 	return nil
 }
 
-func unindex(name string) string {
-	if index := strings.IndexByte(name, '['); index >= 0 {
-		return name[:index]
+type resourceAddress struct {
+	kind  string
+	name  string
+	index *cty.Value
+}
+
+func parseAddress(address string) ([]resourceAddress, error) {
+	traversal, diagnostics := hclsyntax.ParseTraversalAbs([]byte(address), "resource", hcl.InitialPos)
+	invalid := func() ([]resourceAddress, error) {
+		return nil, fmt.Errorf("resource %q must be a Terraform address", address)
 	}
-	return name
+	if diagnostics.HasErrors() {
+		return invalid()
+	}
+	var result []resourceAddress
+	for len(traversal) > 0 {
+		var kind string
+		switch step := traversal[0].(type) {
+		case hcl.TraverseRoot:
+			kind = step.Name
+		case hcl.TraverseAttr:
+			kind = step.Name
+		default:
+			return invalid()
+		}
+		if len(traversal) < 2 {
+			return invalid()
+		}
+		name, ok := traversal[1].(hcl.TraverseAttr)
+		if !ok {
+			return invalid()
+		}
+		entry := resourceAddress{kind: kind, name: name.Name}
+		traversal = traversal[2:]
+		if len(traversal) > 0 {
+			if index, ok := traversal[0].(hcl.TraverseIndex); ok {
+				entry.index = &index.Key
+				traversal = traversal[1:]
+			}
+		}
+		if len(traversal) > 0 && kind != "module" {
+			return invalid()
+		}
+		result = append(result, entry)
+	}
+	if len(result) == 0 {
+		return invalid()
+	}
+	return result, nil
 }
 
 func withinRoot(root, candidate string) error {
